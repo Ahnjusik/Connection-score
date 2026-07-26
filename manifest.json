@@ -1,0 +1,15 @@
+{
+  "name": "Connection 볼링 점수 관리",
+  "short_name": "커넥션볼링",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3349/3349692.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
