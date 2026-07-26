@@ -52,6 +52,8 @@
         button.secondary:hover { background-color: #475569; }
         button.success { background-color: #16a34a; }
         button.success:hover { background-color: #15803d; }
+        button.danger { background-color: #ef4444; }
+        button.danger:hover { background-color: #dc2626; }
         .btn-container { display: flex; gap: 10px; margin-top: 15px; }
         .list-header { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); font-weight: 600; font-size: 14px; color: #64748b; }
         .player-list { max-height: 250px; overflow-y: auto; margin-top: 8px; }
@@ -164,7 +166,12 @@
 
         <!-- 실시간 팀 매칭 & 스코어 입력 카드 (정모 시작 시 노출) -->
         <div class="card" id="resultCard" style="display: none;">
-            <h3>2. 게임별 실시간 팀 매칭 & 스코어 기록 (실시간 공유)</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                <h3 style="margin: 0;">2. 게임별 실시간 팀 매칭 & 스코어 기록 (실시간 공유)</h3>
+                <!-- 관리자 전용 정모 취소 버튼 -->
+                <button class="danger" id="cancelMatchBtn" onclick="cancelMatch()" style="padding: 6px 12px; font-size: 13px; display: none;">🛑 당일 정모 취소 (대기 상태로)</button>
+            </div>
+
             <div class="team-mode-bar">
                 <label style="font-weight: 600; margin-right: 5px;">📊 팀 편성 방식:</label>
                 <label><input type="radio" name="teamMode" value="current" checked onchange="toggleTeamMode()"> 당일 점수 기준</label>
@@ -385,6 +392,7 @@
         const adminControlCard = document.getElementById('adminControlCard');
         const adminDBControlCard = document.getElementById('adminDBControlCard');
         const saveRecordContainer = document.getElementById('saveRecordContainer');
+        const cancelMatchBtn = document.getElementById('cancelMatchBtn');
 
         if (isAdmin) {
             indicator.innerText = "👑 관리자 모드";
@@ -393,6 +401,7 @@
             adminControlCard.style.display = 'block';
             adminDBControlCard.style.display = 'block';
             if(saveRecordContainer) saveRecordContainer.style.display = 'block';
+            if(cancelMatchBtn) cancelMatchBtn.style.display = 'inline-block';
         } else {
             indicator.innerText = "👤 일반 회원 모드";
             indicator.style.color = "var(--primary-color)";
@@ -400,6 +409,7 @@
             adminControlCard.style.display = 'none';
             adminDBControlCard.style.display = 'none';
             if(saveRecordContainer) saveRecordContainer.style.display = 'none'; 
+            if(cancelMatchBtn) cancelMatchBtn.style.display = 'none';
         }
     }
 
@@ -419,6 +429,17 @@
         } else {
             alert("비밀번호가 일치하지 않습니다.");
         }
+    }
+
+    // ★ 당일 정모 강제 취소 함수 추가
+    function cancelMatch() {
+        checkPasswordAndExecute(() => {
+            if (confirm("정말 현재 진행 중인 정모를 취소하고 대기 상태로 되돌리시겠습니까? (입력 중이던 점수는 초기화됩니다)")) {
+                db.ref('bowling_matchActive').set(false);
+                db.ref('bowling_liveScores').set({});
+                alert("정모가 취소되었습니다.");
+            }
+        });
     }
 
     function changeAdminPassword() {
