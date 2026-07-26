@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎳 Connection 점수관리 System</title>
+    <title>🎳 Connection 볼링 클럽 점수관리 System</title>
     
     <!-- PWA 설정을 위한 메타 태그 및 매니페스트 연결 -->
     <link rel="manifest" href="manifest.json">
@@ -29,7 +29,10 @@
 
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px; }
         .container { max-width: 950px; margin: 0 auto; }
-        h1 { text-align: center; color: var(--primary-color); margin-bottom: 25px; }
+        
+        .header-box { display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; }
+        .club-logo { width: 75px; height: 75px; object-fit: contain; border-radius: 50%; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); background: white; padding: 4px; border: 2px solid var(--border-color); }
+        h1 { color: var(--primary-color); margin: 0; font-size: 26px; }
 
         .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid var(--border-color); padding-bottom: 0px; }
         .nav-tab-btn { background: none; border: none; padding: 12px 20px; font-size: 16px; font-weight: 600; color: #64748b; cursor: pointer; border-radius: 8px 8px 0 0; transition: all 0.2s; border-bottom: 3px solid transparent; }
@@ -92,7 +95,12 @@
 <body>
 
 <div class="container">
-    <h1>🎳 Connection 점수관리 System</h1>
+    <!-- 클럽 마크 및 타이틀 영역 -->
+    <div class="header-box">
+        <img src="logo.png" alt="Connection Logo" class="club-logo" onerror="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';">
+        <h1>Bowling Connection 점수관리 System</h1>
+    </div>
+
     <div id="loadingMsg">📡 데이터베이스와 연결 중입니다...</div>
 
     <!-- 접속 모드 표시 바 -->
@@ -281,14 +289,13 @@
     let history = []; 
     let liveScores = {}; 
     let adminPassword = "1950";
-    let isAdmin = false; // 관리자 모드 여부
+    let isAdmin = false;
     
     let teamAvgChartInstance = null;
     let attendanceChartInstance = null;
     let indivAvgChartInstance = null;
 
     window.onload = function() {
-        // 브라우저에 저장된 관리자 권한 확인 (자동 로그인 유지)
         const savedAuth = localStorage.getItem('connection_is_admin');
         if (savedAuth === 'true') {
             isAdmin = true;
@@ -334,11 +341,9 @@
             }
         });
 
-        // 정모 시작 상태 실시간 감지
         db.ref('bowling_matchActive').on('value', (snapshot) => {
             const isActive = snapshot.val();
             if (isActive) {
-                // 저장된 활성 참석자 목록 가져오기
                 db.ref('bowling_activePlayers').once('value', (snap) => {
                     const activeList = snap.val() || players.filter(p => p.checked);
                     matchResults = activeList;
@@ -354,7 +359,6 @@
         });
     };
 
-    // 관리자 모드 토글 및 자동 저장 처리
     function toggleAuthMode() {
         if (!isAdmin) {
             const inputPwd = prompt("관리자 비밀번호를 입력해주세요:");
@@ -395,7 +399,6 @@
             switchBtn.innerText = "관리자 모드로 전환 (비밀번호)";
             adminControlCard.style.display = 'none';
             adminDBControlCard.style.display = 'none';
-            // 일반 회원도 점수는 실시간 입력할 수 있게 하되 정모 저장 버튼은 관리자만 보이게 제한 가능 (원하시면 모두에게 열어둘 수도 있음)
             if(saveRecordContainer) saveRecordContainer.style.display = 'none'; 
         }
     }
@@ -579,7 +582,6 @@
         updateTeamsAndScores();
     }
 
-    // 관리자가 [당일 정모 시작] 누를 때 실행되어 서버에 전파
     function initMatch() {
         const activePlayers = players.filter(p => p.checked);
         const teamCount = parseInt(document.getElementById('teamCount').value);
@@ -743,7 +745,7 @@
             }
 
             syncHistoryToDB();
-            db.ref('bowling_matchActive').set(false); // 정모 종료 및 대기 상태로 전환
+            db.ref('bowling_matchActive').set(false);
             alert('정모 기록이 DB에 안전하게 저장되었습니다!');
         });
     }
