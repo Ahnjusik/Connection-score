@@ -54,7 +54,9 @@
         button.success:hover { background-color: #15803d; }
         button.danger { background-color: #ef4444; }
         button.danger:hover { background-color: #dc2626; }
-        .btn-container { display: flex; gap: 10px; margin-top: 15px; }
+        button.warning { background-color: #d97706; }
+        button.warning:hover { background-color: #b45309; }
+        .btn-container { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
         .list-header { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); font-weight: 600; font-size: 14px; color: #64748b; }
         .player-list { max-height: 250px; overflow-y: auto; margin-top: 8px; }
         .player-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f1f5f9; border-radius: 6px; margin-bottom: 6px; }
@@ -90,8 +92,10 @@
         .empty-stats { text-align: center; padding: 40px; color: #94a3b8; background: #f8fafc; border-radius: 8px; margin-top: 15px; }
         #loadingMsg { text-align: center; color: var(--primary-color); font-weight: bold; padding: 10px; background: #e0f2fe; border-radius: 8px; margin-bottom: 15px; }
         .auto-badge { font-size: 11px; background: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 4px; margin-left: 4px; }
+        .dummy-badge { font-size: 11px; background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 4px; margin-left: 4px; }
         .auth-bar { display: flex; justify-content: space-between; align-items: center; background: #e2e8f0; padding: 8px 16px; border-radius: 8px; margin-bottom: 15px; font-size: 14px; }
         .notice-banner { text-align: center; padding: 30px; background: #f1f5f9; border-radius: 12px; color: #475569; font-size: 16px; font-weight: 600; margin-top: 15px; }
+        .cover-badge { background: #fef08a; color: #854d0e; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-left: 4px; }
     </style>
 </head>
 <body>
@@ -138,12 +142,18 @@
             </div>
 
             <div class="input-group">
-                <input type="text" id="playerName" lang="ko" placeholder="회원 이름 (한글)" style="ime-mode: active;" />
-                <input type="number" id="playerScore" placeholder="수동 에버리지 입력" />
+                <input type="text" id="playerName" lang="ko" placeholder="회원 이름 또는 더미명" style="ime-mode: active;" />
+                <input type="number" id="playerScore" placeholder="수동 에버리지 (더미 점수)" />
                 <button onclick="addPlayer()">회원 추가</button>
             </div>
+            
+            <div style="margin-bottom: 15px; display: flex; gap: 8px;">
+                <button type="button" class="warning" onclick="addQuickDummy(100)" style="padding: 6px 12px; font-size: 13px;">➕ 저점 더미 추가 (100점)</button>
+                <button type="button" class="warning" onclick="addQuickDummy(120)" style="padding: 6px 12px; font-size: 13px;">➕ 일반 더미 추가 (120점)</button>
+            </div>
+
             <div class="list-header">
-                <span>참석 회원 체크 및 에버리지 확인 (기록이 있으면 해당 월 에버리지 자동 반영)</span>
+                <span>참석 회원 체크 및 에버리지 확인</span>
                 <div>
                     <button type="button" onclick="toggleAll(true)" style="padding: 4px 8px; font-size: 12px; background: #64748b; margin-right: 4px;">전체 선택</button>
                     <button type="button" onclick="toggleAll(false)" style="padding: 4px 8px; font-size: 12px; background: #64748b;">전체 해제</button>
@@ -156,7 +166,7 @@
             </div>
         </div>
 
-        <!-- 정모 대기 중 안내 배너 (일반 회원용 또는 정모 전) -->
+        <!-- 정모 대기 중 안내 배너 -->
         <div class="card" id="waitingNoticeCard">
             <div class="notice-banner">
                 ⏳ 현재 진행 중인 당일 정모가 없습니다.<br>
@@ -164,11 +174,10 @@
             </div>
         </div>
 
-        <!-- 실시간 팀 매칭 & 스코어 입력 카드 (정모 시작 시 노출) -->
+        <!-- 실시간 팀 매칭 & 스코어 입력 카드 -->
         <div class="card" id="resultCard" style="display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                 <h3 style="margin: 0;">2. 게임별 실시간 팀 매칭 & 스코어 기록 (실시간 공유)</h3>
-                <!-- 관리자 전용 정모 취소 버튼 -->
                 <button class="danger" id="cancelMatchBtn" onclick="cancelMatch()" style="padding: 6px 12px; font-size: 13px; display: none;">🛑 당일 정모 취소 (대기 상태로)</button>
             </div>
 
@@ -192,10 +201,10 @@
             </div>
             <div class="teams-grid" id="teamsContainer"></div>
             <div style="margin-top: 30px;">
-                <h4>📝 4게임 스코어 입력 (어디서나 실시간 동기화)</h4>
+                <h4>📝 4게임 스코어 입력 및 올커버 체크</h4>
                 <div style="overflow-x: auto;">
                     <table class="score-table">
-                        <thead><tr><th>선수명</th><th>1게임</th><th>2게임</th><th>3게임</th><th>4게임</th><th>총점</th><th>평균</th></tr></thead>
+                        <thead><tr><th>선수명</th><th>1게임 (올커버)</th><th>2게임 (올커버)</th><th>3게임 (올커버)</th><th>4게임 (올커버)</th><th>총점</th><th>평균</th></tr></thead>
                         <tbody id="scoreTableBody"></tbody>
                     </table>
                 </div>
@@ -209,11 +218,11 @@
     <!-- [두 번째 탭] 역대 기록 및 통계 -->
     <div id="history-tab" class="tab-content">
         <div class="card">
-            <h3 style="margin-top: 0;">📊 종합 통계 및 분석</h3>
+            <h3 style="margin-top: 0;">📊 종합 통계 및 세분화 분석</h3>
             <div class="team-mode-bar">
                 <label style="font-weight: 600; margin-right: 5px;">조회 모드:</label>
                 <label><input type="radio" name="statMode" value="team" checked onchange="toggleStatMode()"> 👥 팀 전체 통계</label>
-                <label><input type="radio" name="statMode" value="individual" onchange="toggleStatMode()"> 👤 개인별 통계</label>
+                <label><input type="radio" name="statMode" value="individual" onchange="toggleStatMode()"> 👤 개인별 세부 통계</label>
             </div>
 
             <div id="teamStatView">
@@ -239,6 +248,8 @@
                     <div class="stat-summary-box">
                         <div class="stat-item"><div class="stat-value" id="indivAttendRate">0%</div><div class="stat-label" id="indivAttendCount">출석 0회 / 전체 0회</div></div>
                         <div class="stat-item"><div class="stat-value" id="indivOverallAvg">0.0점</div><div class="stat-label">개인 누적 에버리지</div></div>
+                        <div class="stat-item"><div class="stat-value" id="indivHighGame">0점</div><div class="stat-label">역대 최고점 (High)</div></div>
+                        <div class="stat-item"><div class="stat-value" id="indivCoverCount">0회</div><div class="stat-label">누적 올커버 횟수</div></div>
                     </div>
                     <h4 style="margin-top: 20px; color:#334155;">📈 개인 에버리지 추이</h4>
                     <div class="chart-container"><canvas id="indivAvgChart"></canvas></div>
@@ -431,7 +442,6 @@
         }
     }
 
-    // ★ 당일 정모 강제 취소 함수 추가
     function cancelMatch() {
         checkPasswordAndExecute(() => {
             if (confirm("정말 현재 진행 중인 정모를 취소하고 대기 상태로 되돌리시겠습니까? (입력 중이던 점수는 초기화됩니다)")) {
@@ -464,14 +474,6 @@
         btnElement.classList.add('active');
         if (tabId === 'history-tab') updateStatistics();
     }
-
-    document.getElementById('playerName').addEventListener('input', function(e) {
-        const englishRegex = /[a-zA-Z]/g;
-        if (englishRegex.test(e.target.value)) {
-            alert('선수 이름은 한글로만 입력해주세요.');
-            e.target.value = e.target.value.replace(englishRegex, '');
-        }
-    });
 
     document.getElementById('playerName').addEventListener('keypress', function(e) { if (e.key === 'Enter') document.getElementById('playerScore').focus(); });
     document.getElementById('playerScore').addEventListener('keypress', function(e) { if (e.key === 'Enter') addPlayer(); });
@@ -515,6 +517,7 @@
     function refreshPlayerScoresByMonth() {
         const selectedMonth = document.getElementById('targetMonthSelect').value;
         players.forEach(p => {
+            if (p.isDummy) return;
             const autoAvg = calculateMemberAvgForMonth(p.name, selectedMonth);
             if (autoAvg !== null) {
                 p.score = autoAvg;
@@ -530,30 +533,42 @@
     function addPlayer() {
         const nameInput = document.getElementById('playerName');
         const scoreInput = document.getElementById('playerScore');
-        const name = nameInput.value.trim();
+        let name = nameInput.value.trim();
         let score = parseFloat(scoreInput.value);
         
-        if (!name) return alert('회원 이름을 입력해주세요.');
+        if (!name) return alert('회원 이름 또는 더미명을 입력해주세요.');
 
+        const isDummy = name.includes('더미') || name.includes('휴식') || name.includes('용병');
         const selectedMonth = document.getElementById('targetMonthSelect').value;
         let isAuto = false;
 
         if (isNaN(score) || score <= 0) {
-            const autoAvg = calculateMemberAvgForMonth(name, selectedMonth);
-            if (autoAvg !== null) {
-                score = autoAvg;
-                isAuto = true;
+            if (isDummy) {
+                score = 100;
             } else {
-                score = 0;
+                const autoAvg = calculateMemberAvgForMonth(name, selectedMonth);
+                if (autoAvg !== null) {
+                    score = autoAvg;
+                    isAuto = true;
+                } else {
+                    score = 0;
+                }
             }
         }
 
-        players.push({ id: Date.now(), name: name, score: score, checked: true, isAuto: isAuto });
+        players.push({ id: Date.now(), name: name, score: score, checked: true, isAuto: isAuto, isDummy: isDummy });
         syncPlayersToDB();
         
         nameInput.value = ''; 
         scoreInput.value = '';
-        scoreInput.blur();
+        nameInput.focus();
+    }
+
+    function addQuickDummy(defaultScore) {
+        const dummyCount = players.filter(p => p.isDummy).length + 1;
+        const dummyName = `더미${dummyCount}`;
+        players.push({ id: Date.now(), name: dummyName, score: defaultScore, checked: true, isAuto: false, isDummy: true });
+        syncPlayersToDB();
     }
 
     function updatePlayerScore(id, newScore) {
@@ -581,7 +596,10 @@
         if (players.length === 0) return container.innerHTML = `<div class="empty-stats">등록된 회원이 없습니다.</div>`;
         
         container.innerHTML = players.map(p => {
-            const badge = p.isAuto ? '<span class="auto-badge">자동반영</span>' : '';
+            let badge = '';
+            if (p.isDummy) badge = '<span class="dummy-badge">더미</span>';
+            else if (p.isAuto) badge = '<span class="auto-badge">자동반영</span>';
+
             return `
                 <div class="player-item">
                     <div class="player-info">
@@ -637,7 +655,7 @@
             let sortingScore = p.score; 
             if (teamMode === 'current') {
                 if (targetGame > 0) {
-                    const inputElem = document.querySelector(`input[data-id="${p.id}"][data-game="${targetGame}"]`);
+                    const inputElem = document.querySelector(`input.score-input[data-id="${p.id}"][data-game="${targetGame}"]`);
                     const gameVal = inputElem ? parseFloat(inputElem.value) : NaN;
                     if (!isNaN(gameVal) && gameVal > 0) sortingScore = gameVal;
                 }
@@ -691,11 +709,31 @@
         matchResults = activePlayers;
         document.getElementById('scoreTableBody').innerHTML = activePlayers.map(p => `
             <tr>
-                <td style="font-weight: 600;">${p.name}</td>
-                <td><input type="number" class="score-input" data-id="${p.id}" data-game="1" oninput="onScoreChange(${p.id}, 1, this.value)"></td>
-                <td><input type="number" class="score-input" data-id="${p.id}" data-game="2" oninput="onScoreChange(${p.id}, 2, this.value)"></td>
-                <td><input type="number" class="score-input" data-id="${p.id}" data-game="3" oninput="onScoreChange(${p.id}, 3, this.value)"></td>
-                <td><input type="number" class="score-input" data-id="${p.id}" data-game="4" oninput="onScoreChange(${p.id}, 4, this.value)"></td>
+                <td style="font-weight: 600;">${p.name} ${p.isDummy ? '(더미)' : ''}</td>
+                <td>
+                    <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
+                        <input type="number" class="score-input" data-id="${p.id}" data-game="1" oninput="onScoreChange(${p.id})">
+                        <label style="font-size:12px; cursor:pointer;" title="올커버 체크"><input type="checkbox" class="cover-checkbox" data-id="${p.id}" data-game="1" onchange="onScoreChange(${p.id})"> 올커버</label>
+                    </div>
+                </td>
+                <td>
+                    <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
+                        <input type="number" class="score-input" data-id="${p.id}" data-game="2" oninput="onScoreChange(${p.id})">
+                        <label style="font-size:12px; cursor:pointer;" title="올커버 체크"><input type="checkbox" class="cover-checkbox" data-id="${p.id}" data-game="2" onchange="onScoreChange(${p.id})"> 올커버</label>
+                    </div>
+                </td>
+                <td>
+                    <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
+                        <input type="number" class="score-input" data-id="${p.id}" data-game="3" oninput="onScoreChange(${p.id})">
+                        <label style="font-size:12px; cursor:pointer;" title="올커버 체크"><input type="checkbox" class="cover-checkbox" data-id="${p.id}" data-game="3" onchange="onScoreChange(${p.id})"> 올커버</label>
+                    </div>
+                </td>
+                <td>
+                    <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
+                        <input type="number" class="score-input" data-id="${p.id}" data-game="4" oninput="onScoreChange(${p.id})">
+                        <label style="font-size:12px; cursor:pointer;" title="올커버 체크"><input type="checkbox" class="cover-checkbox" data-id="${p.id}" data-game="4" onchange="onScoreChange(${p.id})"> 올커버</label>
+                    </div>
+                </td>
                 <td id="tot_${p.id}" style="font-weight: 600;">0</td>
                 <td id="avg_${p.id}">0.0</td>
             </tr>
@@ -704,9 +742,16 @@
         updateScoreTableInputsFromLive(activePlayers);
     }
 
-    function onScoreChange(playerId, gameNum, val) {
+    function onScoreChange(playerId) {
         if (!liveScores[playerId]) liveScores[playerId] = {};
-        liveScores[playerId][gameNum] = val;
+        for (let g = 1; g <= 4; g++) {
+            const inputElem = document.querySelector(`input.score-input[data-id="${playerId}"][data-game="${g}"]`);
+            const coverElem = document.querySelector(`input.cover-checkbox[data-id="${playerId}"][data-game="${g}"]`);
+            if (inputElem) {
+                liveScores[playerId][`g${g}`] = inputElem.value;
+                liveScores[playerId][`c${g}`] = coverElem ? coverElem.checked : false;
+            }
+        }
         db.ref('bowling_liveScores').set(liveScores);
     }
 
@@ -715,11 +760,15 @@
             let sum = 0, count = 0;
             const pScores = liveScores[p.id] || {};
             for (let g = 1; g <= 4; g++) {
-                const inputElem = document.querySelector(`input[data-id="${p.id}"][data-game="${g}"]`);
+                const inputElem = document.querySelector(`input.score-input[data-id="${p.id}"][data-game="${g}"]`);
+                const coverElem = document.querySelector(`input.cover-checkbox[data-id="${p.id}"][data-game="${g}"]`);
                 if (inputElem) {
-                    const serverVal = pScores[g] !== undefined ? pScores[g] : '';
+                    const serverVal = pScores[`g${g}`] !== undefined ? pScores[`g${g}`] : '';
                     if (inputElem.value !== serverVal) {
                         inputElem.value = serverVal;
+                    }
+                    if (coverElem) {
+                        coverElem.checked = pScores[`c${g`] === true;
                     }
                     const numVal = parseFloat(serverVal);
                     if (!isNaN(numVal) && numVal > 0) { sum += numVal; count++; }
@@ -741,13 +790,21 @@
 
             let records = [];
             matchResults.forEach(p => {
-                const g1 = parseFloat(document.querySelector(`input[data-id="${p.id}"][data-game="1"]`).value) || 0;
-                const g2 = parseFloat(document.querySelector(`input[data-id="${p.id}"][data-game="2"]`).value) || 0;
-                const g3 = parseFloat(document.querySelector(`input[data-id="${p.id}"][data-game="3"]`).value) || 0;
-                const g4 = parseFloat(document.querySelector(`input[data-id="${p.id}"][data-game="4"]`).value) || 0;
+                const g1 = parseFloat(document.querySelector(`input.score-input[data-id="${p.id}"][data-game="1"]`).value) || 0;
+                const g2 = parseFloat(document.querySelector(`input.score-input[data-id="${p.id}"][data-game="2"]`).value) || 0;
+                const g3 = parseFloat(document.querySelector(`input.score-input[data-id="${p.id}"][data-game="3"]`).value) || 0;
+                const g4 = parseFloat(document.querySelector(`input.score-input[data-id="${p.id}"][data-game="4"]`).value) || 0;
+                
+                const c1 = document.querySelector(`input.cover-checkbox[data-id="${p.id}"][data-game="1"]`).checked;
+                const c2 = document.querySelector(`input.cover-checkbox[data-id="${p.id}"][data-game="2"]`).checked;
+                const c3 = document.querySelector(`input.cover-checkbox[data-id="${p.id}"][data-game="3"]`).checked;
+                const c4 = document.querySelector(`input.cover-checkbox[data-id="${p.id}"][data-game="4"]`).checked;
+                
                 const total = g1 + g2 + g3 + g4;
                 const avg = total > 0 ? (total / 4).toFixed(1) : '0.0';
-                records.push({ name: p.name, g1, g2, g3, g4, total, avg });
+                const coverCount = (c1 ? 1 : 0) + (c2 ? 1 : 0) + (c3 ? 1 : 0) + (c4 ? 1 : 0);
+
+                records.push({ name: p.name, g1, g2, g3, g4, c1, c2, c3, c4, total, avg, coverCount });
             });
             records.sort((a, b) => b.total - a.total);
 
@@ -798,8 +855,18 @@
                 </div>
                 <div style="overflow-x: auto;">
                     <table class="score-table" style="background: white;">
-                        <thead><tr><th>순위</th><th>선수명</th><th>1G</th><th>2G</th><th>3G</th><th>4G</th><th>총점</th><th>평균</th></tr></thead>
-                        <tbody>${displayRecords.map((r, i) => `<tr><td>${i+1}위</td><td>${r.name}</td><td>${r.g1}</td><td>${r.g2}</td><td>${r.g3}</td><td>${r.g4}</td><td><strong>${r.total}</strong></td><td>${r.avg}</td></tr>`).join('')}</tbody>
+                        <thead><tr><th>순위</th><th>선수명</th><th>1G</th><th>2G</th><th>3G</th><th>4G</th><th>총점</th><th>평균</th><th>올커버</th></tr></thead>
+                        <tbody>${displayRecords.map((r, i) => {
+                            let coverText = '-';
+                            let covers = [];
+                            if(r.c1) covers.push('1G');
+                            if(r.c2) covers.push('2G');
+                            if(r.c3) covers.push('3G');
+                            if(r.c4) covers.push('4G');
+                            if(covers.length > 0) coverText = `<span class="cover-badge">🌟 ${covers.join(', ')}</span>`;
+                            
+                            return `<tr><td>${i+1}위</td><td>${r.name}</td><td>${r.g1}</td><td>${r.g2}</td><td>${r.g3}</td><td>${r.g4}</td><td><strong>${r.total}</strong></td><td>${r.avg}</td><td>${coverText}</td></tr>`;
+                        }).join('')}</tbody>
                     </table>
                 </div>
             </div>
@@ -830,8 +897,11 @@
         const record = history.find(h => h.id === id);
         if (!record) return;
         let csvContent = '\uFEFF';
-        csvContent += "순위,선수명,1게임,2게임,3게임,4게임,총점,에버리지\n";
-        record.records.forEach((r, idx) => { csvContent += `${idx + 1}위,${r.name},${r.g1},${r.g2},${r.g3},${r.g4},${r.total},${r.avg}\n`; });
+        csvContent += "순위,선수명,1게임,2게임,3게임,4게임,총점,에버리지,올커버횟수\n";
+        record.records.forEach((r, idx) => { 
+            let cCount = r.coverCount !== undefined ? r.coverCount : ((r.c1?1:0)+(r.c2?1:0)+(r.c3?1:0)+(r.c4?1:0));
+            csvContent += `${idx + 1}위,${r.name},${r.g1},${r.g2},${r.g3},${r.g4},${r.total},${r.avg},${cCount}회\n`; 
+        });
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob); link.download = `Connection_정모기록_${record.date.split(' ')[0]}.csv`;
@@ -841,8 +911,13 @@
     function exportAllDB() {
         if (history.length === 0) return alert('백업할 데이터가 없습니다.');
         let csvContent = '\uFEFF';
-        csvContent += "날짜,선수명,1게임,2게임,3게임,4게임,총점,에버리지\n";
-        history.forEach(h => { h.records.forEach(r => { csvContent += `${h.date},${r.name},${r.g1},${r.g2},${r.g3},${r.g4},${r.total},${r.avg}\n`; }); });
+        csvContent += "날짜,선수명,1게임,2게임,3게임,4게임,총점,에버리지,올커버횟수\n";
+        history.forEach(h => { 
+            h.records.forEach(r => { 
+                let cCount = r.coverCount !== undefined ? r.coverCount : ((r.c1?1:0)+(r.c2?1:0)+(r.c3?1:0)+(r.c4?1:0));
+                csvContent += `${h.date},${r.name},${r.g1},${r.g2},${r.g3},${r.g4},${r.total},${r.avg},${cCount}회\n`; 
+            }); 
+        });
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob); link.download = `Connection_전체DB_백업_${new Date().toISOString().split('T')[0]}.csv`;
@@ -876,7 +951,7 @@
             if (!date || !name || date.includes('위')) continue;
             
             if (!newHistoryMap[date]) newHistoryMap[date] = { id: Date.now() + Math.random(), date: date, records: [] };
-            newHistoryMap[date].records.push({ name, g1: parseFloat(cols[2])||0, g2: parseFloat(cols[3])||0, g3: parseFloat(cols[4])||0, g4: parseFloat(cols[5])||0, total: parseFloat(cols[6])||0, avg: (parseFloat(cols[7])||0).toFixed(1) });
+            newHistoryMap[date].records.push({ name, g1: parseFloat(cols[2])||0, g2: parseFloat(cols[3])||0, g3: parseFloat(cols[4])||0, g4: parseFloat(cols[5])||0, total: parseFloat(cols[6])||0, avg: (parseFloat(cols[7])||0).toFixed(1), coverCount: 0 });
         }
 
         Object.keys(newHistoryMap).forEach(d => {
@@ -982,11 +1057,32 @@
         const chronoHistory = [...history].reverse(); 
         const labels = chronoHistory.map(h => h.date.split(' ')[0]);
 
-        let attendCount = 0, sumAvg = 0, validGames = 0;
+        let attendCount = 0, sumAvg = 0, validGames = 0, highGame = 0, totalCovers = 0;
         const indivAvgs = chronoHistory.map(h => {
             if(!h.records) return null;
             const record = h.records.find(r => r.name === playerName);
-            if(record) { attendCount++; let a = parseFloat(record.avg); if(a > 0) { sumAvg += a; validGames++; } return a; }
+            if(record) { 
+                attendCount++; 
+                let a = parseFloat(record.avg); 
+                if(a > 0) { sumAvg += a; validGames++; }
+                
+                // 최고점 계산
+                [record.g1, record.g2, record.g3, record.g4].forEach(g => {
+                    if (g > highGame) highGame = g;
+                });
+
+                // 올커버 횟수 누적
+                if (record.coverCount !== undefined) {
+                    totalCovers += record.coverCount;
+                } else {
+                    if (record.c1) totalCovers++;
+                    if (record.c2) totalCovers++;
+                    if (record.c3) totalCovers++;
+                    if (record.c4) totalCovers++;
+                }
+
+                return a; 
+            }
             return null; 
         });
 
@@ -994,6 +1090,8 @@
         document.getElementById('indivAttendRate').innerText = `${attendRate}%`;
         document.getElementById('indivAttendCount').innerText = `출석 ${attendCount}회 / 전체 ${totalMeets}회`;
         document.getElementById('indivOverallAvg').innerText = validGames > 0 ? `${(sumAvg / validGames).toFixed(1)}점` : '0점';
+        document.getElementById('indivHighGame').innerText = `${highGame}점`;
+        document.getElementById('indivCoverCount').innerText = `${totalCovers}회`;
 
         if(indivAvgChartInstance) indivAvgChartInstance.destroy();
         const ctxIndiv = document.getElementById('indivAvgChart').getContext('2d');
