@@ -159,7 +159,7 @@
             </div>
             <div class="teams-grid" id="teamsContainer"></div>
             <div style="margin-top: 30px;">
-                <h4>📝 4게임 스코어 입력</h4>
+                <h4>📝 4게임 스코어 입력 (실시간 공유)</h4>
                 <div style="overflow-x: auto;">
                     <table class="score-table">
                         <thead><tr><th>선수명</th><th>1게임</th><th>2게임</th><th>3게임</th><th>4게임</th><th>총점</th><th>평균</th></tr></thead>
@@ -235,7 +235,6 @@
 </div>
 
 <script>
-    // PWA 서비스 워커 등록 코드 추가
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('service-worker.js')
@@ -261,6 +260,7 @@
     let players = [];
     let matchResults = []; 
     let history = []; 
+    let liveScores = {}; // 실시간 입력 점수 보관함
     let adminPassword = "1950";
     
     let teamAvgChartInstance = null;
@@ -297,6 +297,28 @@
         db.ref('bowling_adminPassword').on('value', (snapshot) => {
             const pwd = snapshot.val();
             if(pwd) adminPassword = pwd;
+        });
+
+        // ★ 실시간 스코어 입력 상태 동기화 리스너 추가
+        db.ref('bowling_liveScores').on('value', (snapshot) => {
+            liveScores = snapshot.val() || {};
+            const activePlayers = players.filter(p => p.checked);
+            if (activePlayers.length > 0 && document.getElementById('resultCard').style.display === 'block') {
+                updateScoreTableInputsFromLive(activePlayers);
+            }
+        });
+
+        // ★ 정모 시작 상태 동기화 리스너 추가
+        db.ref('bowling_matchActive').on('value', (snapshot) => {
+            const isActive = snapshot.val();
+            if (isActive) {
+                matchResults = players.filter(p => p.checked);
+                if (matchResults.length > 0 && document.getElementById('resultCard').style.display === 'none') {
+                    renderScoreTable(matchResults);
+                    setupMonthSelectForHistory();
+                    document.getElementById('resultCard').style.display = 'block';
+                }
+            }
         });
     };
 
@@ -475,16 +497,18 @@
         updateTeamsAndScores();
     }
 
+    // ★ 당일 정모 시작 버튼 누를 때 모든 사용자에게 실시간 전파
     function initMatch() {
         const activePlayers = players.filter(p => p.checked);
         const teamCount = parseInt(document.getElementById('teamCount').value);
         if (activePlayers.length < 2) return alert('최소 2명 이상 체크해주세요.');
         if (activePlayers.length < teamCount) return alert('회원 인원이 나눌 팀 수보다 적습니다.');
 
-        matchResults = [...activePlayers];
-        renderScoreTable(activePlayers);
-        document.getElementById('targetGameSelect').value = "1";
-        
+        db.ref('bowling_matchActive').set(true);
+        db.ref('bowling_liveScores').set({}); // 새 게임 시작 시 실시간 점수 초기화
+    }
+
+    function setupMonthSelectForHistory() {
         const select = document.getElementById('historyMonthSelect');
         select.innerHTML = '<option value="all">전체 기간</option>';
         const months = new Set();
@@ -492,11 +516,8 @@
         Array.from(months).sort((a,b)=>b.localeCompare(a)).forEach(m => {
             const opt = document.createElement('option'); opt.value = m; opt.text = m + '월'; select.appendChild(opt);
         });
-        
         document.querySelector('input[name="teamMode"][value="current"]').checked = true;
-        toggleTeamMode(); 
-        document.getElementById('resultCard').style.display = 'block';
-        document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth' });
+        toggleTeamMode();
     }
 
     function updateTeamsAndScores() {
@@ -560,31 +581,52 @@
     }
 
     function renderScoreTable(activePlayers) {
+        matchResults = activePlayers;
         document.getElementById('scoreTableBody').innerHTML = activePlayers.map(p => `
             <tr>
                 <td style="font-weight: 600;">${p.name}</td>
-                <td><input type="number" class="score-input" data-id="${p.id}" data-game="1" oninput="onScoreInput(1, ${p.id})"></td>
-                <td><input type="number" class="score-input" data-id="${p.id}" data-game="2" oninput="onScoreInput(2, ${p.id})"></td>
-                <td><input type="number" class="score-input" data-id="${p.id}" data-game="3" oninput="onScoreInput(3, ${p.id})"></td>
-                <td><input type="number" class="score-input" data-id="${p.id}" data-game="4" oninput="onScoreInput(4, ${p.id})"></td>
+                <td><input type="number" class="score-input" data-id="${p.id}" data-game="1" oninput="onScoreChange(${p.id}, 1, this.value)"></td>
+                <td><input type="number" class="score-input" data-id="${p.id}" data-game="2" oninput="onScoreChange(${p.id}, 2, this.value)"></td>
+                <td><input type="number" class="score-input" data-id="${p.id}" data-game="3" oninput="onScoreChange(${p.id}, 3, this.value)"></td>
+                <td><input type="number" class="score-input" data-id="${p.id}" data-game="4" oninput="onScoreChange(${p.id}, 4, this.value)"></td>
                 <td id="tot_${p.id}" style="font-weight: 600;">0</td>
                 <td id="avg_${p.id}">0.0</td>
             </tr>
         `).join('');
+        setupMonthSelectForHistory();
+        document.getElementById('targetGameSelect').value = "1";
+        updateScoreTableInputsFromLive(activePlayers);
     }
 
-    function onScoreInput(gameNum, id) {
-        let sum = 0, count = 0;
-        document.querySelectorAll(`input[data-id="${id}"]`).forEach(input => {
-            const val = parseFloat(input.value);
-            if (!isNaN(val) && val > 0) { sum += val; count++; }
+    // ★ 사용자가 점수를 입력할 때 즉시 파이어베이스에 동기화 전송
+    function onScoreChange(playerId, gameNum, val) {
+        if (!liveScores[playerId]) liveScores[playerId] = {};
+        liveScores[playerId][gameNum] = val;
+        db.ref('bowling_liveScores').set(liveScores);
+    }
+
+    // ★ 파이어베이스로부터 다른 사용자의 입력값을 실시간으로 받아와 화면에 반영
+    function updateScoreTableInputsFromLive(activePlayers) {
+        activePlayers.forEach(p => {
+            let sum = 0, count = 0;
+            const pScores = liveScores[p.id] || {};
+            for (let g = 1; g <= 4; g++) {
+                const inputElem = document.querySelector(`input[data-id="${p.id}"][data-game="${g}"]`);
+                if (inputElem) {
+                    const serverVal = pScores[g] !== undefined ? pScores[g] : '';
+                    if (inputElem.value !== serverVal) {
+                        inputElem.value = serverVal;
+                    }
+                    const numVal = parseFloat(serverVal);
+                    if (!isNaN(numVal) && numVal > 0) { sum += numVal; count++; }
+                }
+            }
+            const totElem = document.getElementById(`tot_${p.id}`);
+            const avgElem = document.getElementById(`avg_${p.id}`);
+            if (totElem) totElem.innerText = sum;
+            if (avgElem) avgElem.innerText = count > 0 ? (sum / count).toFixed(1) : '0.0';
         });
-        document.getElementById(`tot_${id}`).innerText = sum;
-        document.getElementById(`avg_${id}`).innerText = count > 0 ? (sum / count).toFixed(1) : '0.0';
-        
-        if (document.querySelector('input[name="teamMode"]:checked').value === 'current' && parseInt(document.getElementById('targetGameSelect').value) === gameNum) {
-            updateTeamsAndScores();
-        }
+        updateTeamsAndScores();
     }
 
     function saveMatchRecord() {
@@ -619,6 +661,7 @@
         }
 
         syncHistoryToDB();
+        db.ref('bowling_matchActive').set(false); // 정모 완료 후 초기화 상태로 복귀
         alert('정모 기록이 DB에 안전하게 저장되었습니다!');
     }
 
@@ -768,6 +811,7 @@
             if (confirm('회원명부를 초기화하시겠습니까?')) {
                 players = []; syncPlayersToDB();
                 document.getElementById('resultCard').style.display = 'none';
+                db.ref('bowling_matchActive').set(false);
             }
         });
     }
