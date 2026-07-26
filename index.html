@@ -147,11 +147,6 @@
                 <input type="number" id="playerScore" placeholder="수동 에버리지 (더미 점수)" />
                 <button onclick="addPlayer()">회원 추가</button>
             </div>
-            
-            <div style="margin-bottom: 15px; display: flex; gap: 8px;">
-                <button type="button" class="warning" onclick="addQuickDummy(100)" style="padding: 6px 12px; font-size: 13px;">➕ 저점 더미 추가 (100점)</button>
-                <button type="button" class="warning" onclick="addQuickDummy(120)" style="padding: 6px 12px; font-size: 13px;">➕ 일반 더미 추가 (120점)</button>
-            </div>
 
             <div class="list-header">
                 <span>참석 회원 체크 및 에버리지 확인</span>
@@ -563,13 +558,6 @@
         nameInput.value = ''; 
         scoreInput.value = '';
         nameInput.focus();
-    }
-
-    function addQuickDummy(defaultScore) {
-        const dummyCount = players.filter(p => p.isDummy).length + 1;
-        const dummyName = `더미${dummyCount}`;
-        players.push({ id: Date.now(), name: dummyName, score: defaultScore, checked: true, isAuto: false, isDummy: true });
-        syncPlayersToDB();
     }
 
     function updatePlayerScore(id, newScore) {
