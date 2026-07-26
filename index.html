@@ -8,6 +8,7 @@
     <!-- PWA 설정을 위한 메타 태그 및 매니페스트 연결 -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#2563eb">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
@@ -768,7 +769,7 @@
                         inputElem.value = serverVal;
                     }
                     if (coverElem) {
-                        coverElem.checked = pScores[`c${g`] === true;
+                        coverElem.checked = pScores[`c${g}`] === true;
                     }
                     const numVal = parseFloat(serverVal);
                     if (!isNaN(numVal) && numVal > 0) { sum += numVal; count++; }
@@ -1066,12 +1067,10 @@
                 let a = parseFloat(record.avg); 
                 if(a > 0) { sumAvg += a; validGames++; }
                 
-                // 최고점 계산
                 [record.g1, record.g2, record.g3, record.g4].forEach(g => {
                     if (g > highGame) highGame = g;
                 });
 
-                // 올커버 횟수 누적
                 if (record.coverCount !== undefined) {
                     totalCovers += record.coverCount;
                 } else {
