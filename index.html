@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🎳 Connection 점수관리 System</title>
+    
+    <!-- PWA 설정을 위한 메타 태그 및 매니페스트 연결 -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
     <!-- Chart.js 라이브러리 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
@@ -228,6 +235,15 @@
 </div>
 
 <script>
+    // PWA 서비스 워커 등록 코드 추가
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('service-worker.js')
+                .then(reg => console.log('Service Worker registered!'))
+                .catch(err => console.log('Service Worker registration failed: ', err));
+        });
+    }
+
     const firebaseConfig = {
         apiKey: "AIzaSyCJvWHR4L7LtB1OneHBwhuSu_YwenIwq-k",
         authDomain: "connection-score-management.firebaseapp.com",
@@ -245,7 +261,7 @@
     let players = [];
     let matchResults = []; 
     let history = []; 
-    let adminPassword = "1950"; // 기본 비밀번호 설정
+    let adminPassword = "1950";
     
     let teamAvgChartInstance = null;
     let attendanceChartInstance = null;
@@ -288,10 +304,9 @@
     function syncHistoryToDB() { db.ref('bowling_history').set(history); }
     function saveSettings() { db.ref('bowling_teamCount').set(document.getElementById('teamCount').value); }
 
-    // 비밀번호 확인 검증 함수
     function checkPasswordAndExecute(callback) {
         const inputPwd = prompt("관리자 비밀번호를 입력해주세요:");
-        if (inputPwd === null) return; // 취소 버튼 클릭 시
+        if (inputPwd === null) return;
         if (inputPwd === adminPassword) {
             callback();
         } else {
@@ -299,7 +314,6 @@
         }
     }
 
-    // 관리자 비밀번호 변경 함수
     function changeAdminPassword() {
         checkPasswordAndExecute(() => {
             const newPwd = prompt("변경할 새로운 비밀번호를 입력해주세요:");
@@ -608,24 +622,18 @@
         alert('정모 기록이 DB에 안전하게 저장되었습니다!');
     }
 
-    // ★ 다중 검색어 및 복수 인원 검색 누락 문제 해결된 렌더링 함수
     function renderHistory(dataToRender = history, searchKeywords = []) {
         const container = document.getElementById('historyContainer');
         if (!dataToRender || dataToRender.length === 0) return container.innerHTML = `<div class="empty-stats">검색된 기록이 없습니다.</div>`;
         
         container.innerHTML = dataToRender.map(h => {
             let displayRecords = h.records;
-            
-            // 검색 키워드가 있는 경우, 해당 키워드들(이름 등)을 모두 포함하거나 일부 포함하는 선수를 정확히 필터링
             if (searchKeywords.length > 0) {
-                // 날짜 검색어(숫자나 하이픈 포함)를 제외한 순수 이름 검색어 추출
                 const nameKeywords = searchKeywords.filter(k => !/\d/.test(k));
-                
                 if (nameKeywords.length > 0) {
                     displayRecords = h.records.filter(r => 
                         nameKeywords.some(nk => r.name.toLowerCase().includes(nk))
                     );
-                    // 검색한 이름 중 어느 누구도 이 정모에 참여하지 않았다면 카드 자체를 숨김
                     if (displayRecords.length === 0) return '';
                 }
             }
@@ -650,26 +658,21 @@
         }).join('');
     }
 
-    // ★ 여러 명 검색 시 필터링 로직 수정
     function filterHistory() {
         const keywordInput = document.getElementById('searchInput').value.toLowerCase().trim();
         if (!keywordInput) return renderHistory(history);
         
         const normalizedKeyword = keywordInput.replace(/[./]/g, '-');
         const keywords = normalizedKeyword.split(/\s+/).filter(k => k);
-
-        // 1. 날짜 검색어가 포함되어 있는지 확인
         const hasDateQuery = keywords.some(k => /\d/.test(k));
 
         if (hasDateQuery) {
-            // 날짜와 관련된 검색어라면 해당 날짜 카드를 먼저 필터링
             const filteredHistory = history.filter(h => {
                 const hDateNormalized = h.date.replace(/[./]/g, '-').toLowerCase();
                 return keywords.some(k => hDateNormalized.includes(k));
             });
             renderHistory(filteredHistory, keywords);
         } else {
-            // 순수 이름(다중 인원 포함) 검색인 경우 전체 정모 목록에서 해당 이름들이 포함된 기록만 추출하여 표시
             renderHistory(history, keywords);
         }
     }
@@ -751,7 +754,6 @@
         event.target.value = '';
     }
 
-    // ★ 기록 삭제 시 비밀번호 확인 기능 연동
     function deleteHistory(id) {
         checkPasswordAndExecute(() => {
             if (confirm('DB에서 이 기록을 영구히 삭제하시겠습니까?')) {
@@ -770,7 +772,6 @@
         });
     }
 
-    /* 통계 처리 로직 (Chart.js) */
     function toggleStatMode() {
         const mode = document.querySelector('input[name="statMode"]:checked').value;
         if(mode === 'team') { document.getElementById('teamStatView').style.display = 'block'; document.getElementById('individualStatView').style.display = 'none'; renderTeamStats(); }
