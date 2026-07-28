@@ -250,8 +250,24 @@
                     </div>
                     <h4 style="margin-top: 20px; color:#334155;">📈 정모별 팀 평균 에버리지 추이</h4>
                     <div class="chart-container"><canvas id="teamAvgChart"></canvas></div>
-                    <h4 style="margin-top: 40px; color:#334155;">🏆 전체 멤버 누적 출석률 (Top 10)</h4>
-                    <div class="chart-container"><canvas id="attendanceChart"></canvas></div>
+                    
+                    <!-- 출석률 기간 설정 및 전체 보기 필터 바 -->
+                    <div class="game-selector-bar" style="margin-top: 40px; gap: 15px; justify-content: space-between;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <label style="font-weight: 600;">📅 출석률 조회 기간:</label>
+                            <select id="attendStartMonth" onchange="renderTeamStats()" style="padding: 6px 10px;"></select>
+                            <span>~</span>
+                            <select id="attendEndMonth" onchange="renderTeamStats()" style="padding: 6px 10px;"></select>
+                        </div>
+                        <div>
+                            <label style="font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                                <input type="checkbox" id="showAllAttendance" onchange="renderTeamStats()" style="width: 16px; height: 16px; cursor: pointer;"> 전체 순위 보기 (Top 10 제한 해제)
+                            </label>
+                        </div>
+                    </div>
+
+                    <h4 id="attendanceChartTitle" style="margin-top: 20px; color:#334155;">🏆 멤버별 누적 출석률 (Top 10)</h4>
+                    <div class="chart-container" id="attendanceChartWrapper"><canvas id="attendanceChart"></canvas></div>
                 </div>
                 <div id="emptyTeamStats" class="empty-stats" style="display:none;">저장된 역대 기록이 없어 통계를 계산할 수 없습니다.</div>
             </div>
@@ -356,13 +372,11 @@
     function verifyAccessPassword() {
         const inputVal = document.getElementById('accessPasswordInput').value.trim();
         if (inputVal === adminPassword) {
-            // 관리자 비밀번호로 로그인한 경우 -> 관리자 모드로 입장
             isAdmin = true;
             document.getElementById('authOverlay').style.display = 'none';
             document.getElementById('mainContainer').style.display = 'block';
             updateAuthUI();
         } else if (inputVal === accessPassword) {
-            // 일반회원 비밀번호로 로그인한 경우 -> 일반회원 모드로 입장
             isAdmin = false;
             document.getElementById('authOverlay').style.display = 'none';
             document.getElementById('mainContainer').style.display = 'block';
@@ -391,6 +405,7 @@
                 history = Object.values(rawData).filter(h => h && h.date && Array.isArray(h.records));
             }
             populateTargetMonthSelect();
+            populateAttendanceMonthSelects();
             renderPlayerList();
             renderHistory();
             updateStatistics();
@@ -585,6 +600,38 @@
             select.appendChild(opt);
         });
         select.value = currentVal;
+    }
+
+    function populateAttendanceMonthSelects() {
+        const startSelect = document.getElementById('attendStartMonth');
+        const endSelect = document.getElementById('attendEndMonth');
+        const startVal = startSelect.value;
+        const endVal = endSelect.value;
+
+        startSelect.innerHTML = '';
+        endSelect.innerHTML = '';
+
+        const months = new Set();
+        history.forEach(h => {
+            const m = h.date.match(/^(\d{4}[-./]\d{2})/);
+            if (m) months.add(m[1].replace(/[-/]/g, '-'));
+        });
+
+        const sortedMonths = Array.from(months).sort(); // 오름차순 (과거 -> 최신)
+        if (sortedMonths.length === 0) {
+            startSelect.innerHTML = '<option value="">기록 없음</option>';
+            endSelect.innerHTML = '<option value="">기록 없음</option>';
+            return;
+        }
+
+        sortedMonths.forEach(m => {
+            startSelect.appendChild(new Option(m + '월', m));
+            endSelect.appendChild(new Option(m + '월', m));
+        });
+
+        // 기존 선택값 유지 또는 기본값 설정 (시작은 맨 처음, 끝은 맨 최신)
+        startSelect.value = sortedMonths.includes(startVal) ? startVal : sortedMonths[0];
+        endSelect.value = sortedMonths.includes(endVal) ? endVal : sortedMonths[sortedMonths.length - 1];
     }
 
     function refreshPlayerScoresByMonth() {
@@ -1102,7 +1149,11 @@
         else { document.getElementById('teamStatView').style.display = 'none'; document.getElementById('individualStatView').style.display = 'block'; renderIndividualStats(); }
     }
 
-    function updateStatistics() { populateStatPlayerSelect(); toggleStatMode(); }
+    function updateStatistics() { 
+        populateStatPlayerSelect(); 
+        populateAttendanceMonthSelects();
+        toggleStatMode(); 
+    }
 
     function populateStatPlayerSelect() {
         let allNamesSet = new Set();
@@ -1160,13 +1211,82 @@
         const ctxTeam = document.getElementById('teamAvgChart').getContext('2d');
         teamAvgChartInstance = new Chart(ctxTeam, { type: 'line', data: { labels: labels, datasets: [{ label: '팀 전체 평균 에버리지', data: teamAvgs, borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderWidth: 2, pointBackgroundColor: '#2563eb', fill: true, tension: 0.3 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false } } } });
 
+        // 출석률 기간 필터링 적용
+        const startMonth = document.getElementById('attendStartMonth').value;
+        const endMonth = document.getElementById('attendEndMonth').value;
+
+        const filteredHistoryForAttend = history.filter(h => {
+            const mMatch = h.date.match(/^(\d{4}[-./]\d{2})/);
+            if (!mMatch) return true;
+            const hMonth = mMatch[1].replace(/[-/]/g, '-');
+            if (startMonth && hMonth < startMonth) return false;
+            if (endMonth && hMonth > endMonth) return false;
+            return true;
+        });
+
         let attendanceMap = {};
-        history.forEach(h => { if(h && h.records) h.records.forEach(r => { if(!attendanceMap[r.name]) attendanceMap[r.name] = 0; attendanceMap[r.name]++; }); });
-        let sortedAttend = Object.keys(attendanceMap).map(name => ({ name: name, count: attendanceMap[name], rate: (attendanceMap[name] / history.length * 100).toFixed(0) })).sort((a, b) => b.count - a.count).slice(0, 10);
+        filteredHistoryForAttend.forEach(h => { 
+            if(h && h.records) h.records.forEach(r => { 
+                if(!attendanceMap[r.name]) attendanceMap[r.name] = 0; 
+                attendanceMap[r.name]++; 
+            }); 
+        });
+
+        const showAll = document.getElementById('showAllAttendance').checked;
+        const totalFilteredMeets = filteredHistoryForAttend.length;
+
+        let sortedAttend = Object.keys(attendanceMap).map(name => ({ 
+            name: name, 
+            count: attendanceMap[name], 
+            rate: totalFilteredMeets > 0 ? (attendanceMap[name] / totalFilteredMeets * 100).toFixed(0) : 0 
+        })).sort((a, b) => b.count - a.count);
+
+        const chartTitleElem = document.getElementById('attendanceChartTitle');
+        const chartWrapperElem = document.getElementById('attendanceChartWrapper');
+
+        if (!showAll) {
+            chartTitleElem.innerText = `🏆 멤버별 누적 출석률 (Top 10)`;
+            sortedAttend = sortedAttend.slice(0, 10);
+        } else {
+            chartTitleElem.innerText = `🏆 멤버별 누적 출석률 (전체 순위)`;
+        }
+
+        // 전체 순위일 경우 데이터가 많으므로 차트 높이를 동적으로 늘려줌
+        const chartCanvasElem = document.getElementById('attendanceChart');
+        if (showAll && sortedAttend.length > 10) {
+            chartWrapperElem.style.height = `${Math.max(300, sortedAttend.length * 35)}px`;
+        } else {
+            chartWrapperElem.style.height = `300px`;
+        }
 
         if(attendanceChartInstance) attendanceChartInstance.destroy();
-        const ctxAttend = document.getElementById('attendanceChart').getContext('2d');
-        attendanceChartInstance = new Chart(ctxAttend, { type: 'bar', data: { labels: sortedAttend.map(a => a.name), datasets: [{ label: '출석 횟수', data: sortedAttend.map(a => a.count), backgroundColor: '#16a34a', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { callbacks: { label: function(context) { let item = sortedAttend[context.dataIndex]; return `출석: ${item.count}회 (${item.rate}%)`; } } } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } } });
+        const ctxAttend = chartCanvasElem.getContext('2d');
+        attendanceChartInstance = new Chart(ctxAttend, { 
+            type: 'bar', 
+            data: { 
+                labels: sortedAttend.map(a => a.name), 
+                datasets: [{ label: '출석 횟수', data: sortedAttend.map(a => a.count), backgroundColor: '#16a34a', borderRadius: 4 }] 
+            }, 
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                indexAxis: showAll && sortedAttend.length > 10 ? 'y' : 'x', // 데이터가 많으면 가로 바 차트로 보기 편하게 전환
+                plugins: { 
+                    tooltip: { 
+                        callbacks: { 
+                            label: function(context) { 
+                                let item = sortedAttend[context.dataIndex]; 
+                                return `출석: ${item.count}회 (${item.rate}%)`; 
+                            } 
+                        } 
+                    } 
+                }, 
+                scales: { 
+                    x: { beginAtZero: true, ticks: { stepSize: 1 } },
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                } 
+            } 
+        });
     }
 
     function renderIndividualStats() {
