@@ -111,12 +111,12 @@
 </head>
 <body>
 
-    <!-- 일반회원 입장 비밀번호 확인 오버레이 -->
+    <!-- 첫 입장 비밀번호 확인 오버레이 -->
     <div id="authOverlay">
         <div class="auth-card">
             <h2>🎳 Connection</h2>
-            <p>클럽 회원 전용 시스템입니다.<br>일반회원 입장 비밀번호를 입력해 주세요.</p>
-            <input type="password" id="accessPasswordInput" placeholder="입장 비밀번호 입력" autofocus>
+            <p>클럽 회원 전용 시스템입니다.<br>입장 비밀번호를 입력해 주세요.</p>
+            <input type="password" id="accessPasswordInput" placeholder="비밀번호 입력" autofocus>
             <button onclick="verifyAccessPassword()">입장하기</button>
         </div>
     </div>
@@ -343,7 +343,7 @@
     let isAdmin = false;
     let allPlayerNames = []; 
     let visibleHistoryCount = 3; 
-    let isPlayerListExpanded = false; // 회원 명부 펼침 상태 관리
+    let isPlayerListExpanded = false;
     
     let teamAvgChartInstance = null;
     let attendanceChartInstance = null;
@@ -355,29 +355,26 @@
 
     function verifyAccessPassword() {
         const inputVal = document.getElementById('accessPasswordInput').value.trim();
-        if (inputVal === accessPassword) {
+        if (inputVal === adminPassword) {
+            // 관리자 비밀번호로 로그인한 경우 -> 관리자 모드로 입장
+            isAdmin = true;
             document.getElementById('authOverlay').style.display = 'none';
             document.getElementById('mainContainer').style.display = 'block';
-            sessionStorage.setItem('connection_access_granted', 'true');
+            updateAuthUI();
+        } else if (inputVal === accessPassword) {
+            // 일반회원 비밀번호로 로그인한 경우 -> 일반회원 모드로 입장
+            isAdmin = false;
+            document.getElementById('authOverlay').style.display = 'none';
+            document.getElementById('mainContainer').style.display = 'block';
+            updateAuthUI();
         } else {
-            alert("비밀번호가 틀렸습니다. 올바른 일반회원 입장 비밀번호를 입력해주세요.");
+            alert("비밀번호가 틀렸습니다. 올바른 비밀번호를 입력해주세요.");
             document.getElementById('accessPasswordInput').value = '';
             document.getElementById('accessPasswordInput').focus();
         }
     }
 
     window.onload = function() {
-        if (sessionStorage.getItem('connection_access_granted') === 'true') {
-            document.getElementById('authOverlay').style.display = 'none';
-            document.getElementById('mainContainer').style.display = 'block';
-        }
-
-        const savedAuth = localStorage.getItem('connection_is_admin');
-        if (savedAuth === 'true') {
-            isAdmin = true;
-        }
-        updateAuthUI();
-
         db.ref('bowling_players').on('value', (snapshot) => {
             players = snapshot.val() || [];
             populateTargetMonthSelect();
@@ -446,7 +443,6 @@
             if (inputPwd === null) return;
             if (inputPwd === adminPassword) {
                 isAdmin = true;
-                localStorage.setItem('connection_is_admin', 'true');
                 alert("관리자 모드로 전환되었습니다.");
                 updateAuthUI();
             } else {
@@ -454,7 +450,6 @@
             }
         } else {
             isAdmin = false;
-            localStorage.removeItem('connection_is_admin');
             alert("일반 회원 모드로 전환되었습니다.");
             updateAuthUI();
         }
