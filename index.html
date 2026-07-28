@@ -29,8 +29,17 @@
         }
 
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px; }
-        .container { max-width: 950px; margin: 0 auto; }
+        .container { max-width: 950px; margin: 0 auto; display: none; } /* 초기에는 숨김 처리 (비밀번호 인증 전) */
         
+        /* 입장 비밀번호 오버레이 스타일 */
+        #authOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.85); display: flex; justify-content: center; align-items: center; z-index: 9999; backdrop-filter: blur(5px); }
+        .auth-card { background: white; padding: 35px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: 100%; max-width: 380px; text-align: center; }
+        .auth-card h2 { margin-top: 0; color: var(--primary-color); margin-bottom: 10px; }
+        .auth-card p { font-size: 14px; color: #64748b; margin-bottom: 20px; }
+        .auth-card input { width: 100%; padding: 12px; font-size: 16px; text-align: center; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 15px; box-sizing: border-box; }
+        .auth-card button { width: 100%; padding: 12px; font-size: 16px; background-color: var(--primary-color); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+        .auth-card button:hover { background-color: #1d4ed8; }
+
         .header-box { display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; }
         .club-logo { width: 75px; height: 75px; object-fit: contain; border-radius: 50%; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); background: white; padding: 4px; border: 2px solid var(--border-color); }
         h1 { color: var(--primary-color); margin: 0; font-size: 26px; }
@@ -82,13 +91,13 @@
         .history-box { background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; margin-bottom: 15px; }
         .team-mode-bar { display: flex; align-items: center; gap: 15px; background: #e2e8f0; padding: 12px 16px; border-radius: 8px; margin-bottom: 10px; flex-wrap: wrap; }
         .team-mode-bar label { cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px; color: #1e293b; }
-        .game-selector-bar { display: flex; align-items: center; gap: 12px; background: #f1f5f9; padding: 12px 16px; border-radius: 8px; margin-bottom: 15px; }
+        .game-selector-bar { display: flex; align-items: center; gap: 12px; background: #f1f5f9; padding: 12px 16px; border-radius: 8px; margin-bottom: 15px; flex-wrap: wrap; }
         .game-selector-bar.history-mode { background: #e0f2fe; }
         .search-bar { width: 100%; max-width: 300px; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; }
         .chart-container { position: relative; height: 300px; width: 100%; margin-top: 20px; }
-        .stat-summary-box { display: flex; gap: 20px; background: #f1f5f9; padding: 15px; border-radius: 8px; margin-top: 15px; margin-bottom: 25px; justify-content: space-around;}
-        .stat-item { text-align: center; }
-        .stat-value { font-size: 24px; font-weight: bold; color: var(--primary-color); }
+        .stat-summary-box { display: flex; gap: 15px; background: #f1f5f9; padding: 15px; border-radius: 8px; margin-top: 15px; margin-bottom: 25px; justify-content: space-around; flex-wrap: wrap;}
+        .stat-item { text-align: center; min-width: 110px; }
+        .stat-value { font-size: 22px; font-weight: bold; color: var(--primary-color); }
         .stat-label { font-size: 13px; color: #64748b; margin-top: 4px; }
         .empty-stats { text-align: center; padding: 40px; color: #94a3b8; background: #f8fafc; border-radius: 8px; margin-top: 15px; }
         #loadingMsg { text-align: center; color: var(--primary-color); font-weight: bold; padding: 10px; background: #e0f2fe; border-radius: 8px; margin-bottom: 15px; }
@@ -101,7 +110,17 @@
 </head>
 <body>
 
-<div class="container">
+    <!-- 일반회원 입장 비밀번호 확인 오버레이 -->
+    <div id="authOverlay">
+        <div class="auth-card">
+            <h2>🎳 Connection</h2>
+            <p>클럽 회원 전용 시스템입니다.<br>일반회원 입장 비밀번호를 입력해 주세요.</p>
+            <input type="password" id="accessPasswordInput" placeholder="입장 비밀번호 입력" autofocus>
+            <button onclick="verifyAccessPassword()">입장하기</button>
+        </div>
+    </div>
+
+<div class="container" id="mainContainer">
     <!-- 클럽 마크 및 타이틀 영역 -->
     <div class="header-box">
         <img src="logo.png" alt="Connection Logo" class="club-logo" onerror="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';">
@@ -236,9 +255,20 @@
             </div>
 
             <div id="individualStatView" style="display:none;">
-                <div class="game-selector-bar">
-                    <label for="statPlayerSelect" style="font-weight: 600;">조회할 선수 선택:</label>
-                    <select id="statPlayerSelect" onchange="renderIndividualStats()" style="padding: 6px 12px; min-width: 150px;"></select>
+                <div class="game-selector-bar" style="gap: 20px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <label for="statPlayerSelect" style="font-weight: 600;">선수 선택:</label>
+                        <input type="text" id="statPlayerSearch" placeholder="🔍 이름 검색" oninput="filterStatPlayerDropdown()" style="padding: 6px 10px; width: 110px; font-size: 14px;">
+                        <select id="statPlayerSelect" onchange="renderIndividualStats()" style="padding: 6px 12px; min-width: 130px;"></select>
+                    </div>
+                    <div>
+                        <label for="statPeriodSelect" style="font-weight: 600; margin-right: 6px;">출석률 기간:</label>
+                        <select id="statPeriodSelect" onchange="renderIndividualStats()" style="padding: 6px 12px;">
+                            <option value="all" selected>전체 기간</option>
+                            <option value="3">최근 3개월</option>
+                            <option value="6">최근 6개월</option>
+                        </select>
+                    </div>
                 </div>
                 <div id="indivStatContent">
                     <div class="stat-summary-box">
@@ -260,6 +290,9 @@
                 <input type="text" id="searchInput" class="search-bar" placeholder="🔍 날짜 또는 이름(다중 검색 가능) 검색" oninput="filterHistory()">
             </div>
             <div id="historyContainer" style="margin-top: 15px;"></div>
+            <div id="loadMoreContainer" style="text-align: center; margin-top: 20px; display: none;">
+                <button onclick="loadMoreHistory()" class="secondary" style="width: 100%; max-width: 300px; padding: 10px;">🔽 이전 기록 더보기 (+5개)</button>
+            </div>
         </div>
 
         <!-- 관리자 전용 DB 관리 카드 -->
@@ -269,6 +302,7 @@
                 <button class="success" onclick="exportAllDB()">📥 전체 데이터 백업 (CSV 다운로드)</button>
                 <input type="file" id="csvFileInput" accept=".csv" style="display: none;" onchange="importCSV(event)">
                 <button class="secondary" onclick="checkPasswordAndExecute(() => document.getElementById('csvFileInput').click())">📤 엑셀(CSV)로 데이터 일괄 업로드</button>
+                <button class="secondary" onclick="changeAccessPassword()" style="background-color: #0284c7;">🔑 일반회원 입장 비밀번호 변경</button>
                 <button class="secondary" onclick="changeAdminPassword()" style="background-color: #475569;">🔒 관리자 비밀번호 변경</button>
             </div>
         </div>
@@ -302,14 +336,39 @@
     let matchResults = []; 
     let history = []; 
     let liveScores = {}; 
-    let adminPassword = "1950";
+    let accessPassword = "1950"; // 일반회원 입장 비밀번호 기본값
+    let adminPassword = "1950";  // 관리자 비밀번호 기본값
     let isAdmin = false;
+    let allPlayerNames = []; 
+    let visibleHistoryCount = 3; 
     
     let teamAvgChartInstance = null;
     let attendanceChartInstance = null;
     let indivAvgChartInstance = null;
 
+    document.getElementById('accessPasswordInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') verifyAccessPassword();
+    });
+
+    function verifyAccessPassword() {
+        const inputVal = document.getElementById('accessPasswordInput').value.trim();
+        if (inputVal === accessPassword) {
+            document.getElementById('authOverlay').style.display = 'none';
+            document.getElementById('mainContainer').style.display = 'block';
+            sessionStorage.setItem('connection_access_granted', 'true');
+        } else {
+            alert("비밀번호가 틀렸습니다. 올바른 일반회원 입장 비밀번호를 입력해주세요.");
+            document.getElementById('accessPasswordInput').value = '';
+            document.getElementById('accessPasswordInput').focus();
+        }
+    }
+
     window.onload = function() {
+        if (sessionStorage.getItem('connection_access_granted') === 'true') {
+            document.getElementById('authOverlay').style.display = 'none';
+            document.getElementById('mainContainer').style.display = 'block';
+        }
+
         const savedAuth = localStorage.getItem('connection_is_admin');
         if (savedAuth === 'true') {
             isAdmin = true;
@@ -340,6 +399,11 @@
         db.ref('bowling_teamCount').on('value', (snapshot) => {
             const count = snapshot.val();
             if(count) document.getElementById('teamCount').value = count;
+        });
+
+        db.ref('bowling_accessPassword').on('value', (snapshot) => {
+            const pwd = snapshot.val();
+            if(pwd) accessPassword = pwd;
         });
 
         db.ref('bowling_adminPassword').on('value', (snapshot) => {
@@ -380,10 +444,10 @@
             if (inputPwd === adminPassword) {
                 isAdmin = true;
                 localStorage.setItem('connection_is_admin', 'true');
-                alert("관리자 모드로 전환되었습니다. (비밀번호 자동 저장됨)");
+                alert("관리자 모드로 전환되었습니다.");
                 updateAuthUI();
             } else {
-                alert("비밀번호가 일치하지 않습니다.");
+                alert("관리자 비밀번호가 일치하지 않습니다.");
             }
         } else {
             isAdmin = false;
@@ -434,7 +498,7 @@
         if (inputPwd === adminPassword) {
             callback();
         } else {
-            alert("비밀번호가 일치하지 않습니다.");
+            alert("관리자 비밀번호가 일치하지 않습니다.");
         }
     }
 
@@ -448,9 +512,24 @@
         });
     }
 
+    function changeAccessPassword() {
+        checkPasswordAndExecute(() => {
+            const newPwd = prompt("변경할 새로운 [일반회원 입장 비밀번호]를 입력해주세요:");
+            if (!newPwd) return;
+            if (newPwd.trim().length < 4) {
+                alert("비밀번호는 최소 4자리 이상으로 설정해주세요.");
+                return;
+            }
+            db.ref('bowling_accessPassword').set(newPwd.trim()).then(() => {
+                accessPassword = newPwd.trim();
+                alert("일반회원 입장 비밀번호가 성공적으로 변경되었습니다.");
+            });
+        });
+    }
+
     function changeAdminPassword() {
         checkPasswordAndExecute(() => {
-            const newPwd = prompt("변경할 새로운 비밀번호를 입력해주세요:");
+            const newPwd = prompt("변경할 새로운 [관리자 비밀번호]를 입력해주세요:");
             if (!newPwd) return;
             if (newPwd.trim().length < 4) {
                 alert("비밀번호는 최소 4자리 이상으로 설정해주세요.");
@@ -819,9 +898,23 @@
 
     function renderHistory(dataToRender = history, searchKeywords = []) {
         const container = document.getElementById('historyContainer');
-        if (!dataToRender || dataToRender.length === 0) return container.innerHTML = `<div class="empty-stats">검색된 기록이 없습니다.</div>`;
+        const loadMoreContainer = document.getElementById('loadMoreContainer');
+
+        if (!dataToRender || dataToRender.length === 0) {
+            loadMoreContainer.style.display = 'none';
+            return container.innerHTML = `<div class="empty-stats">검색된 기록이 없습니다.</div>`;
+        }
         
-        container.innerHTML = dataToRender.map(h => {
+        const isSearching = searchKeywords.length > 0;
+        const slicedData = isSearching ? dataToRender : dataToRender.slice(0, visibleHistoryCount);
+
+        if (!isSearching && dataToRender.length > visibleHistoryCount) {
+            loadMoreContainer.style.display = 'block';
+        } else {
+            loadMoreContainer.style.display = 'none';
+        }
+
+        container.innerHTML = slicedData.map(h => {
             let displayRecords = h.records;
             if (searchKeywords.length > 0) {
                 const nameKeywords = searchKeywords.filter(k => !/\d/.test(k));
@@ -861,6 +954,11 @@
             </div>
         `;
         }).join('');
+    }
+
+    function loadMoreHistory() {
+        visibleHistoryCount += 5;
+        renderHistory();
     }
 
     function filterHistory() {
@@ -994,16 +1092,37 @@
     function updateStatistics() { populateStatPlayerSelect(); toggleStatMode(); }
 
     function populateStatPlayerSelect() {
+        let allNamesSet = new Set();
+        players.forEach(p => allNamesSet.add(p.name));
+        history.forEach(h => { if(h && h.records) h.records.forEach(r => allNamesSet.add(r.name)); });
+        allPlayerNames = Array.from(allNamesSet).sort();
+        filterStatPlayerDropdown();
+    }
+
+    function filterStatPlayerDropdown() {
+        const query = document.getElementById('statPlayerSearch').value.toLowerCase().trim();
         const select = document.getElementById('statPlayerSelect');
         const currentSelected = select.value;
-        let allNames = new Set();
-        players.forEach(p => allNames.add(p.name));
-        history.forEach(h => { if(h && h.records) h.records.forEach(r => allNames.add(r.name)); });
-        let namesArray = Array.from(allNames).sort();
-        select.innerHTML = '<option value="">-- 선수 선택 --</option>';
-        namesArray.forEach(name => { let opt = document.createElement('option'); opt.value = name; opt.text = name; select.appendChild(opt); });
-        if (namesArray.includes(currentSelected)) select.value = currentSelected;
-        else if (namesArray.length > 0) select.value = namesArray[0];
+
+        const filteredNames = allPlayerNames.filter(name => name.toLowerCase().includes(query));
+
+        select.innerHTML = '';
+        if (filteredNames.length === 0) {
+            select.innerHTML = '<option value="">-- 검색 결과 없음 --</option>';
+        } else {
+            filteredNames.forEach(name => {
+                let opt = document.createElement('option');
+                opt.value = name;
+                opt.text = name;
+                select.appendChild(opt);
+            });
+            if (filteredNames.includes(currentSelected)) {
+                select.value = currentSelected;
+            } else {
+                select.value = filteredNames[0];
+            }
+        }
+        renderIndividualStats();
     }
 
     function renderTeamStats() {
@@ -1039,11 +1158,26 @@
 
     function renderIndividualStats() {
         const playerName = document.getElementById('statPlayerSelect').value;
+        const periodFilter = document.getElementById('statPeriodSelect').value;
         const totalMeets = history.length;
         if(!playerName || totalMeets === 0) { document.getElementById('indivStatContent').style.display = 'none'; document.getElementById('emptyIndivStats').style.display = 'block'; return; }
         document.getElementById('indivStatContent').style.display = 'block'; document.getElementById('emptyIndivStats').style.display = 'none';
 
-        const chronoHistory = [...history].reverse(); 
+        let filteredHistory = [...history];
+        if (periodFilter !== 'all') {
+            const monthsLimit = parseInt(periodFilter);
+            const now = new Date();
+            const cutoffDate = new Date(now.getFullYear(), now.getMonth() - monthsLimit, now.getDate());
+            
+            filteredHistory = history.filter(h => {
+                const datePart = h.date.split(' ')[0];
+                const hDate = new Date(datePart);
+                return hDate >= cutoffDate;
+            });
+        }
+
+        const periodTotalMeets = filteredHistory.length;
+        const chronoHistory = [...filteredHistory].reverse(); 
         const labels = chronoHistory.map(h => h.date.split(' ')[0]);
 
         let attendCount = 0, sumAvg = 0, validGames = 0, highGame = 0, totalCovers = 0;
@@ -1073,9 +1207,9 @@
             return null; 
         });
 
-        const attendRate = ((attendCount / totalMeets) * 100).toFixed(1);
+        const attendRate = periodTotalMeets > 0 ? ((attendCount / periodTotalMeets) * 100).toFixed(1) : '0.0';
         document.getElementById('indivAttendRate').innerText = `${attendRate}%`;
-        document.getElementById('indivAttendCount').innerText = `출석 ${attendCount}회 / 전체 ${totalMeets}회`;
+        document.getElementById('indivAttendCount').innerText = `출석 ${attendCount}회 / 전체 ${periodTotalMeets}회`;
         document.getElementById('indivOverallAvg').innerText = validGames > 0 ? `${(sumAvg / validGames).toFixed(1)}점` : '0점';
         document.getElementById('indivHighGame').innerText = `${highGame}점`;
         document.getElementById('indivCoverCount').innerText = `${totalCovers}회`;
