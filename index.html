@@ -14,7 +14,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-    <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js"></script>
 
     <style>
         :root {
@@ -32,8 +31,10 @@
         .auth-card { background: white; padding: 35px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: 100%; max-width: 380px; text-align: center; }
         .auth-card h2 { margin-top: 0; color: var(--primary-color); margin-bottom: 10px; }
         .auth-card p { font-size: 14px; color: #64748b; margin-bottom: 25px; line-height: 1.5; }
-        .kakao-login-btn { width: 100%; padding: 12px; font-size: 16px; background-color: #fee500; color: #191919; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: background-color 0.2s; }
-        .kakao-login-btn:hover { background-color: #fada0a; }
+        .auth-input { width: 100%; padding: 12px; font-size: 16px; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 12px; box-sizing: border-box; text-align: center; outline: none; }
+        .auth-input:focus { border-color: var(--primary-color); }
+        .auth-btn { width: 100%; padding: 12px; font-size: 16px; background-color: var(--primary-color); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: background-color 0.2s; }
+        .auth-btn:hover { background-color: #1d4ed8; }
 
         .header-box { display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; }
         .club-logo { width: 75px; height: 75px; object-fit: contain; border-radius: 50%; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); background: white; padding: 4px; border: 2px solid var(--border-color); }
@@ -59,8 +60,6 @@
         button.success:hover { background-color: #15803d; }
         button.danger { background-color: #ef4444; }
         button.danger:hover { background-color: #dc2626; }
-        button.kakao { background-color: #fee500; color: #191919; }
-        button.kakao:hover { background-color: #fada0a; }
         .btn-container { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
         .list-header { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); font-weight: 600; font-size: 14px; color: #64748b; flex-wrap: wrap; gap: 8px; }
         .player-list { max-height: 250px; overflow-y: auto; margin-top: 8px; transition: max-height 0.3s ease; }
@@ -114,22 +113,21 @@
 
     <!-- 로그인 및 승인 대기 오버레이 -->
     <div id="authOverlay">
-        <!-- 1단계: 카카오 로그인 전 -->
+        <!-- 1단계: 이름 입력 및 가입 신청 -->
         <div class="auth-card" id="loginCardView">
             <h2>🎳 Connection</h2>
-            <p>클럽 회원 전용 시스템입니다.<br>카카오 계정으로 인증 후 관리자 승인을 거쳐 입장할 수 있습니다.</p>
-            <button class="kakao-login-btn" onclick="loginWithKakao()">
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M9 1C4.58172 1 1 3.81422 1 7.29412C1 9.47953 2.38503 11.4111 4.54572 12.5516L3.6766 15.7725C3.59021 16.0917 3.95759 16.3475 4.23812 16.1557L8.0694 13.5673C8.37525 13.6015 8.68535 13.619 10 13.619C14.4183 13.619 18 10.8048 18 7.32485C18 3.84491 14.4183 1 10 1" fill="#191919"/></svg>
-                카카오로 로그인 / 가입 신청
-            </button>
-            <button onclick="bypassAdminLogin()" style="margin-top: 15px; width: 100%; background: #64748b; font-size: 13px; padding: 8px;">👑 [관리자] 테스트 바로 입장</button>
+            <p>클럽 회원 전용 시스템입니다.<br>본인의 실제 이름을 입력 후 가입 신청해 주세요.</p>
+            <input type="text" id="signupNameInput" class="auth-input" placeholder="본인 성함 입력" lang="ko">
+            <button class="auth-btn" onclick="requestSignup()">가입 신청하기</button>
+            <button onclick="loginAsAdminPrompt()" style="margin-top: 12px; width: 100%; background: #475569; font-size: 14px; padding: 10px; border-radius: 8px; border:none; color:white; font-weight:600; cursor:pointer;">🔑 관리자 직접 로그인 (비밀번호)</button>
         </div>
 
         <!-- 2단계: 승인 대기 중 -->
         <div class="auth-card" id="pendingCardView" style="display: none;">
             <h2>⏳ 가입 승인 대기 중</h2>
-            <p>카카오 계정 인증이 완료되었습니다.<br><strong id="pendingUserIdDisplay" style="color:var(--primary-color);"></strong><br><br>클럽 관리자의 가입 승인을 기다리고 있습니다. 승인이 완료되면 자동으로 입장이 가능해집니다.</p>
-            <button class="secondary" onclick="logoutKakao()" style="width: 100%; margin-top: 10px;">다른 계정으로 로그인</button>
+            <p><strong id="pendingNameDisplay" style="color:var(--primary-color);"></strong>님 환영합니다!<br><br>클럽 관리자의 가입 승인을 기다리고 있습니다. 승인이 완료되면 자동으로 입장이 가능해집니다.</p>
+            <button class="secondary" onclick="resetSignupSession()" style="width: 100%; margin-top: 10px;">다른 이름으로 다시 신청</button>
+            <button onclick="loginAsAdminPrompt()" style="margin-top: 12px; width: 100%; background: #475569; font-size: 14px; padding: 10px; border-radius: 8px; border:none; color:white; font-weight:600; cursor:pointer;">🔑 관리자 직접 로그인 (비밀번호)</button>
         </div>
     </div>
 
@@ -160,7 +158,7 @@
             
             <!-- 가입 대기 회원 승인 박스 -->
             <div id="pendingApprovalSection" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 15px; margin-bottom: 20px; display: none;">
-                <h4 style="margin-top: 0; color: #1e40af;">📥 신규 가입 대기 카카오 계정 목록</h4>
+                <h4 style="margin-top: 0; color: #1e40af;">📥 신규 가입 대기 회원 목록</h4>
                 <div id="pendingApprovalList" style="display: flex; flex-direction: column; gap: 8px;"></div>
             </div>
 
@@ -186,7 +184,7 @@
             </div>
 
             <div class="list-header">
-                <span>참석 회원 체크 및 에버리지 확인</span>
+                <span>참석 회원 체크 및 에버리지 확인 (탈퇴 처리 가능)</span>
                 <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
                     <button type="button" id="expandListBtn" onclick="toggleExpandPlayerList()" style="padding: 4px 8px; font-size: 12px; background: #0284c7;">📖 전체 펼치기</button>
                     <button type="button" onclick="toggleAll(true)" style="padding: 4px 8px; font-size: 12px; background: #64748b;">전체 선택</button>
@@ -316,7 +314,6 @@
                             <span>~</span>
                             <select id="clubStatEndMonth" onchange="renderClubStatsTable()" style="padding: 6px 10px;"></select>
                             <button class="success" onclick="exportClubStatsExcel()" style="padding: 6px 10px; font-size: 13px;">📥 엑셀 다운</button>
-                            <button class="kakao" onclick="shareClubStatsKakao()" style="padding: 6px 10px; font-size: 13px; font-weight: bold;">💬 카카오톡 공유</button>
                         </div>
                     </div>
 
@@ -409,25 +406,17 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    try {
-        if (window.Kakao && !Kakao.isInitialized()) {
-            Kakao.init('12ba06b035aec27dddf5674111077d4d');
-        }
-    } catch (e) {
-        console.log("카카오 SDK 초기화 실패");
-    }
-
     let players = [];
     let matchResults = []; 
     let history = []; 
     let liveScores = {}; 
     let hiddenStatMembers = {}; 
     let pendingApprovals = {};
-    let approvedKakaoUsers = {};
+    let approvedNames = {};
     let accessPassword = "1950"; 
     let adminPassword = "1950";  
     let isAdmin = false;
-    let currentKakaoSessionId = null;
+    let currentMyName = null;
     
     let allPlayerNames = []; 
     let visibleHistoryCount = 3; 
@@ -440,45 +429,58 @@
     let attendanceChartInstance = null;
     let indivAvgChartInstance = null;
 
-    function loginWithKakao() {
-        if (window.Kakao && Kakao.isInitialized()) {
-            Kakao.Auth.authorize({
-                redirectUri: window.location.href.split('?')[0],
-            });
-        } else {
-            alert('카카오 SDK가 초기화되지 않았습니다.');
+    function requestSignup() {
+        const nameInput = document.getElementById('signupNameInput').value.trim();
+        if (!nameInput) {
+            alert('본인 성함을 입력해주세요.');
+            return;
         }
-    }
 
-    // 관리자 테스트 바로 입장 버튼
-    function bypassAdminLogin() {
-        let adminKey = 'admin_master_key_999';
-        localStorage.setItem('connection_kakao_session', adminKey);
-        // 곧바로 승인 처리 등록
-        db.ref('bowling_approvedKakaoUsers/' + adminKey).set(true).then(() => {
-            location.reload();
+        let signupKey = 'user_' + btoa(encodeURIComponent(nameInput)).replace(/=/g, '');
+        localStorage.setItem('connection_my_name_key', signupKey);
+        localStorage.setItem('connection_my_real_name', nameInput);
+
+        db.ref('bowling_pendingApprovals/' + signupKey).set({
+            name: nameInput,
+            requestedAt: new Date().toLocaleString()
+        }).then(() => {
+            currentMyName = nameInput;
+            checkAuthAndRender();
         });
     }
 
-    function logoutKakao() {
-        localStorage.removeItem('connection_kakao_session');
-        window.location.href = window.location.pathname;
+    // 관리자 직접 로그인 버튼 함수
+    function loginAsAdminPrompt() {
+        const inputPwd = prompt("관리자 비밀번호를 입력해주세요:");
+        if (inputPwd === null) return;
+        if (inputPwd === adminPassword) {
+            isAdmin = true;
+            currentMyName = "관리자";
+            localStorage.setItem('connection_my_real_name', "관리자");
+            localStorage.setItem('connection_my_name_key', "admin_master");
+            alert("관리자 권한으로 로그인되었습니다.");
+            checkAuthAndRender();
+            updateAuthUI();
+        } else {
+            alert("관리자 비밀번호가 일치하지 않습니다.");
+        }
+    }
+
+    function resetSignupSession() {
+        localStorage.removeItem('connection_my_name_key');
+        localStorage.removeItem('connection_my_real_name');
+        isAdmin = false;
+        location.reload();
     }
 
     window.onload = function() {
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has('code')) {
-            window.history.replaceState({}, document.title, window.location.pathname);
-            // 카카오 로그인이 성공적으로 완료되어 돌아온 경우 고유 세션 부여
-            let uniqueKey = 'kakao_user_' + Math.random().toString(36).substring(2, 12);
-            localStorage.setItem('connection_kakao_session', uniqueKey);
+        currentMyName = localStorage.getItem('connection_my_real_name');
+        if (localStorage.getItem('connection_my_name_key') === 'admin_master') {
+            isAdmin = true;
         }
 
-        currentKakaoSessionId = localStorage.getItem('connection_kakao_session');
-
-        // DB 리스너 연동
-        db.ref('bowling_approvedKakaoUsers').on('value', (snapshot) => {
-            approvedKakaoUsers = snapshot.val() || {};
+        db.ref('bowling_approvedNames').on('value', (snapshot) => {
+            approvedNames = snapshot.val() || {};
             checkAuthAndRender();
         });
 
@@ -559,8 +561,7 @@
     };
 
     function checkAuthAndRender() {
-        if (!currentKakaoSessionId) {
-            // 로그인 전
+        if (!currentMyName) {
             document.getElementById('authOverlay').style.display = 'flex';
             document.getElementById('loginCardView').style.display = 'block';
             document.getElementById('pendingCardView').style.display = 'none';
@@ -568,31 +569,21 @@
             return;
         }
 
-        // 1. 이미 승인된 사용자 계정인 경우 -> 메인 입장
-        if (approvedKakaoUsers[currentKakaoSessionId]) {
+        let signupKey = localStorage.getItem('connection_my_name_key');
+
+        if (isAdmin || signupKey === 'admin_master' || approvedNames[signupKey] || approvedNames[currentMyName]) {
             document.getElementById('authOverlay').style.display = 'none';
             document.getElementById('mainContainer').style.display = 'block';
-            document.getElementById('userInfoDisplay').innerText = `(카카오 로그인 완료)`;
+            document.getElementById('userInfoDisplay').innerText = `(${currentMyName}님 접속중)`;
+            updateAuthUI();
             return;
         }
 
-        // 2. 로그인은 했으나 아직 대기 중인 경우 -> 대기 화면
-        if (pendingApprovals[currentKakaoSessionId]) {
-            document.getElementById('authOverlay').style.display = 'flex';
-            document.getElementById('loginCardView').style.display = 'none';
-            document.getElementById('pendingCardView').style.display = 'block';
-            document.getElementById('mainContainer').style.display = 'none';
-            document.getElementById('pendingUserIdDisplay').innerText = `계정 ID: ${currentKakaoSessionId.substring(0, 15)}...`;
-            return;
-        }
-
-        // 3. 최초 로그인 직후 -> 가입 대기열에 자동 등록 후 대기 화면 표시
-        db.ref('bowling_pendingApprovals/' + currentKakaoSessionId).set({
-            requestedAt: new Date().toLocaleString(),
-            userAgent: navigator.userAgent.substring(0, 30)
-        }).then(() => {
-            location.reload();
-        });
+        document.getElementById('authOverlay').style.display = 'flex';
+        document.getElementById('loginCardView').style.display = 'none';
+        document.getElementById('pendingCardView').style.display = 'block';
+        document.getElementById('mainContainer').style.display = 'none';
+        document.getElementById('pendingNameDisplay').innerText = currentMyName;
     }
 
     function renderPendingApprovals() {
@@ -606,44 +597,56 @@
         }
 
         section.style.display = 'block';
-        container.innerHTML = keys.map(kakaoId => {
-            const info = pendingApprovals[kakaoId] || {};
+        container.innerHTML = keys.map(signupKey => {
+            const info = pendingApprovals[signupKey] || {};
+            const name = info.name || signupKey;
             return `
                 <div style="display: flex; justify-content: space-between; align-items: center; background: white; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; flex-wrap: wrap; gap: 8px;">
                     <div>
-                        <strong>카카오 계정</strong> <span style="font-size: 12px; color: #64748b;">(${kakaoId.substring(0, 12)}...)</span><br>
+                        <strong>회원 이름: ${name}</strong><br>
                         <span style="font-size: 11px; color: #94a3b8;">신청일시: ${info.requestedAt || '정보 없음'}</span>
                     </div>
                     <div style="display: flex; gap: 6px;">
-                        <button class="success" onclick="approveKakaoUser('${kakaoId}')" style="padding: 4px 10px; font-size: 12px;">승인</button>
-                        <button class="danger" onclick="rejectKakaoUser('${kakaoId}')" style="padding: 4px 10px; font-size: 12px;">거절</button>
+                        <button class="success" onclick="approveUser('${signupKey}', '${name}')" style="padding: 4px 10px; font-size: 12px;">승인</button>
+                        <button class="danger" onclick="rejectUser('${signupKey}')" style="padding: 4px 10px; font-size: 12px;">거절</button>
                     </div>
                 </div>
             `;
         }).join('');
     }
 
-    function approveKakaoUser(kakaoId) {
+    function approveUser(signupKey, name) {
         let updates = {};
-        updates['bowling_approvedKakaoUsers/' + kakaoId] = true;
-        updates['bowling_pendingApprovals/' + kakaoId] = null;
+        updates['bowling_approvedNames/' + signupKey] = true;
+        updates['bowling_approvedNames/' + name] = true;
+        updates['bowling_pendingApprovals/' + signupKey] = null;
+        
+        if (!players.some(p => p.name === name)) {
+            players.push({ id: Date.now(), name: name, score: 150, checked: true, isAuto: false, isDummy: false });
+            updates['bowling_players'] = players;
+        }
+
         db.ref().update(updates).then(() => {
-            alert("해당 카카오 계정의 가입이 승인되었습니다.");
+            alert(`${name}님의 가입이 승인되었습니다.`);
         });
     }
 
-    function rejectKakaoUser(kakaoId) {
-        if (confirm("가입 신청을 거절(삭제)하시겠습니까?")) {
-            db.ref('bowling_pendingApprovals/' + kakaoId).remove().then(() => {
+    function rejectUser(signupKey) {
+        if (confirm("가입 신청을 거절하시겠습니까?")) {
+            db.ref('bowling_pendingApprovals/' + signupKey).remove().then(() => {
                 alert("거절되었습니다.");
             });
         }
     }
 
     function requestWithdrawal() {
-        if (confirm("정말 탈퇴하시겠습니까? 로그인 인증이 초기화됩니다.")) {
-            db.ref('bowling_approvedKakaoUsers/' + currentKakaoSessionId).remove().then(() => {
-                logoutKakao();
+        if (confirm("정말 클럽 회원 탈퇴를 진행하시겠습니까?")) {
+            let signupKey = localStorage.getItem('connection_my_name_key');
+            let updates = {};
+            updates['bowling_approvedNames/' + signupKey] = null;
+            updates['bowling_approvedNames/' + currentMyName] = null;
+            db.ref().update(updates).then(() => {
+                resetSignupSession();
             });
         }
     }
@@ -656,6 +659,7 @@
                 isAdmin = true;
                 alert("관리자 모드로 전환되었습니다.");
                 updateAuthUI();
+                checkAuthAndRender();
             } else {
                 alert("비밀번호가 일치하지 않습니다.");
             }
@@ -735,6 +739,7 @@
         if (tabId === 'history-tab') updateStatistics();
     }
 
+    document.getElementById('signupNameInput').addEventListener('keypress', function(e) { if (e.key === 'Enter') requestSignup(); });
     document.getElementById('playerName').addEventListener('keypress', function(e) { if (e.key === 'Enter') document.getElementById('playerScore').focus(); });
     document.getElementById('playerScore').addEventListener('keypress', function(e) { if (e.key === 'Enter') addPlayer(); });
 
@@ -843,7 +848,20 @@
         }
     }
 
-    function removePlayer(id) { players = players.filter(p => p.id !== id); syncPlayersToDB(); }
+    // [회원 탈퇴/삭제 기능] 명부에서 회원을 삭제하고 승인 권한도 함께 회수
+    function removePlayer(id) {
+        const player = players.find(p => p.id === id);
+        if (!player) return;
+        if (confirm(`'${player.name}'님을 명부에서 삭제(탈퇴)하시겠습니까?`)) {
+            players = players.filter(p => p.id !== id);
+            syncPlayersToDB();
+            // 승인 내역에서도 제거하여 다시 가입 신청하도록 처리
+            let updates = {};
+            updates['bowling_approvedNames/' + player.name] = null;
+            db.ref().update(updates);
+        }
+    }
+
     function toggleCheck(id) { const p = players.find(p => p.id === id); if(p) { p.checked = !p.checked; syncPlayersToDB(); } }
     function toggleAll(status) { players.forEach(p => p.checked = status); syncPlayersToDB(); }
 
@@ -866,7 +884,7 @@
                     <input type="number" class="edit-score-input" value="${p.score}" onchange="updatePlayerScore(${p.id}, this.value)">
                     <span style="font-size:13px; color:#64748b;">점</span>
                 </div>
-                <button class="delete-btn" onclick="removePlayer(${p.id})">삭제</button>
+                <button class="delete-btn" onclick="removePlayer(${p.id})">탈퇴(삭제)</button>
             </div>
         `).join('');
     }
@@ -1060,7 +1078,6 @@
                 <div style="display: flex; justify-content: space-between; border-bottom: 2px solid var(--primary-color); padding-bottom: 6px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; gap: 8px;">
                     <strong style="font-size: 16px; color: var(--primary-color);">📅 ${h.date}</strong>
                     <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-                        <button class="kakao" onclick="shareHistoryKakao(${h.id})" style="padding: 4px 10px; font-size: 12px; font-weight: bold;">💬 카카오톡 공유</button>
                         <button class="success" onclick="exportToExcel(${h.id})" style="padding: 4px 8px; font-size: 12px;">📥 엑셀</button>
                         <button class="delete-btn" onclick="checkPasswordAndExecute(() => deleteHistory(${h.id}))" style="padding: 4px 8px; font-size: 12px;">삭제</button>
                     </div>
@@ -1075,7 +1092,7 @@
                         }).join('')}</tbody>
                     </table>
                 </div>
-            </div>`;
+            `;
         }).join('');
     }
 
@@ -1342,25 +1359,6 @@
         let newH = {};
         document.querySelectorAll('.member-filter-chk').forEach(c => { if (!c.checked) newH[c.getAttribute('data-name')] = true; });
         db.ref('bowling_hiddenStatMembers').set(newH).then(() => { hiddenStatMembers = newH; closeMemberFilterModal(); updateStatistics(); alert('저장되었습니다.'); });
-    }
-
-    function shareClubStatsKakao() {
-        const { clubStatsArray, startMonth, endMonth } = getClubStatsArrayData();
-        if (clubStatsArray.length === 0) return;
-        let top = clubStatsArray.slice(0, 5).map((item, i) => `${i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : `${i+1}위`))} ${item.name} : ${item.avg.toFixed(1)}점 (${item.games}게임)`).join('\n');
-        let desc = `${(startMonth && endMonth) ? `[${startMonth}~${endMonth}]` : '[전체 누적]'}\n\n[TOP 5]\n${top}`;
-        if (window.Kakao && Kakao.isInitialized()) {
-            Kakao.Share.sendDefault({ objectType: 'feed', content: { title: '🎳 클럽원 순위 통계', description: desc, imageUrl: 'https://cdn-icons-png.flaticon.com/512/3394/3394997.png', link: { mobileWebUrl: window.location.href, webUrl: window.location.href } } });
-        }
-    }
-
-    function shareHistoryKakao(id) {
-        const rec = history.find(h => h.id === id);
-        if (!rec) return;
-        let top3 = rec.records.slice(0, 3).map((r, i) => `${i===0?'🥇':i===1?'🥈':'🥉'} ${r.name} (${r.total}점)`).join('\n');
-        if (window.Kakao && Kakao.isInitialized()) {
-            Kakao.Share.sendDefault({ objectType: 'feed', content: { title: `🎳 정모 결과 (${rec.date.split(' ')[0]})`, description: `[시상대 TOP 3]\n${top3}`, imageUrl: 'https://cdn-icons-png.flaticon.com/512/3394/3394997.png', link: { mobileWebUrl: window.location.href, webUrl: window.location.href } } });
-        }
     }
 
     function exportClubStatsExcel() {
