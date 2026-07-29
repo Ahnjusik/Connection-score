@@ -273,19 +273,17 @@
             </div>
 
             <div id="individualStatView" style="display:none;">
-                <div class="game-selector-bar" style="gap: 20px;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="game-selector-bar" style="gap: 20px; justify-content: space-between; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                         <label for="statPlayerSelect" style="font-weight: 600;">선수 선택:</label>
                         <input type="text" id="statPlayerSearch" placeholder="🔍 이름 검색" oninput="filterStatPlayerDropdown()" style="padding: 6px 10px; width: 110px; font-size: 14px;">
                         <select id="statPlayerSelect" onchange="renderIndividualStats()" style="padding: 6px 12px; min-width: 130px;"></select>
                     </div>
-                    <div>
-                        <label for="statPeriodSelect" style="font-weight: 600; margin-right: 6px;">조회 기간:</label>
-                        <select id="statPeriodSelect" onchange="renderIndividualStats()" style="padding: 6px 12px;">
-                            <option value="all" selected>전체 기간</option>
-                            <option value="3">최근 3개월</option>
-                            <option value="6">최근 6개월</option>
-                        </select>
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <label style="font-weight: 600;">📅 개인 에버리지 조회 기간:</label>
+                        <select id="indivStartMonth" onchange="renderIndividualStats()" style="padding: 6px 10px;"></select>
+                        <span>~</span>
+                        <select id="indivEndMonth" onchange="renderIndividualStats()" style="padding: 6px 10px;"></select>
                     </div>
                 </div>
                 <div id="indivStatContent">
@@ -298,10 +296,10 @@
                     <h4 style="margin-top: 20px; color:#334155;">📈 개인 에버리지 추이</h4>
                     <div class="chart-container"><canvas id="indivAvgChart"></canvas></div>
 
-                    <!-- 클럽원 전체 에버리지 / 순위 표 영역 (기간 필터 및 탈퇴/게스트 제외 설정 추가) -->
+                    <!-- 클럽원 전체 에버리지 / 순위 표 영역 -->
                     <div class="game-selector-bar" style="margin-top: 40px; gap: 15px; justify-content: space-between; flex-wrap: wrap;">
                         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                            <label style="font-weight: 600;">📅 조회 기간:</label>
+                            <label style="font-weight: 600;">📅 전체 순위 조회 기간:</label>
                             <select id="clubStatStartMonth" onchange="renderClubStatsTable()" style="padding: 6px 10px;"></select>
                             <span>~</span>
                             <select id="clubStatEndMonth" onchange="renderClubStatsTable()" style="padding: 6px 10px;"></select>
@@ -440,6 +438,7 @@
             }
             populateTargetMonthSelect();
             populateAttendanceMonthSelects();
+            populateIndivMonthSelects();
             populateClubStatMonthSelects();
             renderPlayerList();
             renderHistory();
@@ -640,6 +639,37 @@
     function populateAttendanceMonthSelects() {
         const startSelect = document.getElementById('attendStartMonth');
         const endSelect = document.getElementById('attendEndMonth');
+        const startVal = startSelect.value;
+        const endVal = endSelect.value;
+
+        startSelect.innerHTML = '';
+        endSelect.innerHTML = '';
+
+        const months = new Set();
+        history.forEach(h => {
+            const m = h.date.match(/^(\d{4}[-./]\d{2})/);
+            if (m) months.add(m[1].replace(/[-/]/g, '-'));
+        });
+
+        const sortedMonths = Array.from(months).sort();
+        if (sortedMonths.length === 0) {
+            startSelect.innerHTML = '<option value="">기록 없음</option>';
+            endSelect.innerHTML = '<option value="">기록 없음</option>';
+            return;
+        }
+
+        sortedMonths.forEach(m => {
+            startSelect.appendChild(new Option(m + '월', m));
+            endSelect.appendChild(new Option(m + '월', m));
+        });
+
+        startSelect.value = sortedMonths.includes(startVal) ? startVal : sortedMonths[0];
+        endSelect.value = sortedMonths.includes(endVal) ? endVal : sortedMonths[sortedMonths.length - 1];
+    }
+
+    function populateIndivMonthSelects() {
+        const startSelect = document.getElementById('indivStartMonth');
+        const endSelect = document.getElementById('indivEndMonth');
         const startVal = startSelect.value;
         const endVal = endSelect.value;
 
@@ -1217,14 +1247,25 @@
     function updateStatistics() { 
         populateStatPlayerSelect(); 
         populateAttendanceMonthSelects();
+        populateIndivMonthSelects();
         populateClubStatMonthSelects();
         toggleStatMode(); 
     }
 
     function populateStatPlayerSelect() {
         let allNamesSet = new Set();
-        players.forEach(p => allNamesSet.add(p.name));
-        history.forEach(h => { if(h && h.records) h.records.forEach(r => allNamesSet.add(r.name)); });
+        players.forEach(p => {
+            if (!p.name.includes('더미') && !p.name.includes('휴식') && !p.name.includes('용병')) {
+                allNamesSet.add(p.name);
+            }
+        });
+        history.forEach(h => { 
+            if(h && h.records) h.records.forEach(r => {
+                if (!r.name.includes('더미') && !r.name.includes('휴식') && !r.name.includes('용병')) {
+                    allNamesSet.add(r.name);
+                }
+            }); 
+        });
         allPlayerNames = Array.from(allNamesSet).sort();
         filterStatPlayerDropdown();
     }
@@ -1292,6 +1333,7 @@
         let attendanceMap = {};
         filteredHistoryForAttend.forEach(h => { 
             if(h && h.records) h.records.forEach(r => { 
+                if (r.name.includes('더미') || r.name.includes('휴식') || r.name.includes('용병')) return;
                 if(!attendanceMap[r.name]) attendanceMap[r.name] = 0; 
                 attendanceMap[r.name]++; 
             }); 
@@ -1355,23 +1397,20 @@
 
     function renderIndividualStats() {
         const playerName = document.getElementById('statPlayerSelect').value;
-        const periodFilter = document.getElementById('statPeriodSelect').value;
+        const startMonth = document.getElementById('indivStartMonth').value;
+        const endMonth = document.getElementById('indivEndMonth').value;
         const totalMeets = history.length;
         if(!playerName || totalMeets === 0) { document.getElementById('indivStatContent').style.display = 'none'; document.getElementById('emptyIndivStats').style.display = 'block'; return; }
         document.getElementById('indivStatContent').style.display = 'block'; document.getElementById('emptyIndivStats').style.display = 'none';
 
-        let filteredHistory = [...history];
-        if (periodFilter !== 'all') {
-            const monthsLimit = parseInt(periodFilter);
-            const now = new Date();
-            const cutoffDate = new Date(now.getFullYear(), now.getMonth() - monthsLimit, now.getDate());
-            
-            filteredHistory = history.filter(h => {
-                const datePart = h.date.split(' ')[0];
-                const hDate = new Date(datePart);
-                return hDate >= cutoffDate;
-            });
-        }
+        let filteredHistory = history.filter(h => {
+            const mMatch = h.date.match(/^(\d{4}[-./]\d{2})/);
+            if (!mMatch) return true;
+            const hMonth = mMatch[1].replace(/[-/]/g, '-');
+            if (startMonth && hMonth < startMonth) return false;
+            if (endMonth && hMonth > endMonth) return false;
+            return true;
+        });
 
         const periodTotalMeets = filteredHistory.length;
         const chronoHistory = [...filteredHistory].reverse(); 
