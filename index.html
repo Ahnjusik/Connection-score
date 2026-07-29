@@ -60,7 +60,7 @@
         button.success:hover { background-color: #15803d; }
         button.danger { background-color: #ef4444; }
         button.danger:hover { background-color: #dc2626; }
-        button.kakao-share { background-color: #fee500; color: #191919; }
+        button.kakao-share { background-color: #fee500; color: #191919; font-weight: 600; }
         button.kakao-share:hover { background-color: #fada0a; }
 
         .btn-container { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
@@ -210,7 +210,7 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                 <h3 style="margin: 0;">2. 게임별 실시간 팀 매칭 & 스코어 기록 (실시간 공유)</h3>
                 <div style="display: flex; gap: 8px;">
-                    <button class="kakao-share" onclick="shareMatchToKakao()" style="padding: 6px 12px; font-size: 13px; font-weight: 600;">💬 카카오톡 공유</button>
+                    <button class="kakao-share" onclick="shareMatchToKakao()" style="padding: 6px 12px; font-size: 13px;">💬 카카오톡 공유</button>
                     <button class="danger" id="cancelMatchBtn" onclick="cancelMatch()" style="padding: 6px 12px; font-size: 13px; display: none;">🛑 당일 정모 취소</button>
                 </div>
             </div>
@@ -317,6 +317,9 @@
                             <select id="clubStatStartMonth" onchange="renderClubStatsTable()" style="padding: 6px 10px;"></select>
                             <span>~</span>
                             <select id="clubStatEndMonth" onchange="renderClubStatsTable()" style="padding: 6px 10px;"></select>
+                        </div>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button class="kakao-share" onclick="shareClubStatsToKakao()" style="padding: 6px 12px; font-size: 13px;">💬 전체 순위 공유</button>
                             <button class="success" onclick="exportClubStatsExcel()" style="padding: 6px 10px; font-size: 13px;">📥 엑셀 다운</button>
                         </div>
                     </div>
@@ -657,7 +660,6 @@
         }
     }
 
-    // 관리자 확인 후 명부에서 삭제하는 기능
     function removePlayer(id) {
         const player = players.find(p => p.id === id);
         if (!player) return;
@@ -671,36 +673,44 @@
         });
     }
 
-    // 카카오톡 공유 기능 (현재 팀 매칭 및 점수 현황 요약 전송)
+    // 당일 정모 결과 카카오톡 공유
     function shareMatchToKakao() {
         let summaryText = "🎳 [Bowling Connection 정모 현황]\n\n";
-        
-        // 각 팀 정보 구성
         const teamBoxes = document.querySelectorAll('.team-box');
         if (teamBoxes.length > 0) {
             teamBoxes.forEach((box, idx) => {
                 const title = box.querySelector('h3').innerText;
                 const stats = box.querySelector('.team-stats').innerText;
                 summaryText += `📌 ${title} (${stats})\n`;
-                
                 const members = box.querySelectorAll('.team-member');
-                members.forEach(m => {
-                    summaryText += `  • ${m.innerText.replace('\n', ': ')}\n`;
-                });
+                members.forEach(m => { summaryText += `  • ${m.innerText.replace('\n', ': ')}\n`; });
                 summaryText += "\n";
             });
         } else {
             summaryText += "현재 진행 중인 팀 매칭 정보가 없습니다.";
         }
+        Kakao.Share.sendDefault({ objectType: 'text', text: summaryText.trim(), link: { mobileWebUrl: window.location.href, webUrl: window.location.href } });
+    }
 
-        Kakao.Share.sendDefault({
-            objectType: 'text',
-            text: summaryText.trim(),
-            link: {
-                mobileWebUrl: window.location.href,
-                webUrl: window.location.href,
-            },
+    // 클럽 전체 순위 및 기록표 카카오톡 공유
+    function shareClubStatsToKakao() {
+        const { clubStatsArray, startMonth, endMonth } = getClubStatsArrayData();
+        if (clubStatsArray.length === 0) return alert('공유할 통계 데이터가 없습니다.');
+
+        let periodStr = (startMonth && endMonth) ? `(${startMonth} ~ ${endMonth})` : '(전체 기간)';
+        let text = `🎳 [Bowling Connection 클럽 전체 순위]\n📅 조회 기간: ${periodStr}\n\n`;
+        
+        // 상위 10명까지만 깔끔하게 요약해서 카카오톡 전송
+        const topList = clubStatsArray.slice(0, 10);
+        topList.forEach((item, idx) => {
+            text += `${idx + 1}위 ${item.name} | 에버: ${item.avg.toFixed(1)}점 (High: ${item.high}, Low: ${item.low})\n`;
         });
+
+        if (clubStatsArray.length > 10) {
+            text += `\n... 외 ${clubStatsArray.length - 10}명 (시스템에서 전체 확인)`;
+        }
+
+        Kakao.Share.sendDefault({ objectType: 'text', text: text.trim(), link: { mobileWebUrl: window.location.href, webUrl: window.location.href } });
     }
 
     function toggleAuthMode() {
