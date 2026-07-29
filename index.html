@@ -113,7 +113,6 @@
 
     <!-- 카카오 로그인 및 승인 대기 오버레이 -->
     <div id="authOverlay">
-        <!-- 1단계: 카카오 로그인 버튼 -->
         <div class="auth-card" id="loginCardView">
             <h2>🎳 Connection</h2>
             <p>클럽 회원 전용 시스템입니다.<br>카카오 계정으로 안전하게 로그인해 주세요.</p>
@@ -124,7 +123,6 @@
             <button onclick="loginAsAdminPrompt()" style="margin-top: 12px; width: 100%; background: #475569; font-size: 14px; padding: 10px; border-radius: 8px; border:none; color:white; font-weight:600; cursor:pointer;">🔑 관리자 직접 로그인 (비밀번호)</button>
         </div>
 
-        <!-- 2단계: 승인 대기 중 -->
         <div class="auth-card" id="pendingCardView" style="display: none;">
             <h2>⏳ 가입 승인 대기 중</h2>
             <p><strong id="pendingNameDisplay" style="color:var(--primary-color);"></strong>님 환영합니다!<br><br>클럽 관리자의 가입 승인을 기다리고 있습니다. 승인이 완료되면 자동으로 입장이 가능해집니다.</p>
@@ -158,7 +156,6 @@
         <div class="card" id="adminControlCard" style="display: none;">
             <h3>1. 회원명부 및 가입 승인 관리 (관리자 전용)</h3>
             
-            <!-- 가입 대기 회원 승인 박스 -->
             <div id="pendingApprovalSection" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 15px; margin-bottom: 20px; display: none;">
                 <h4 style="margin-top: 0; color: #1e40af;">📥 신규 가입 대기 회원 목록</h4>
                 <div id="pendingApprovalList" style="display: flex; flex-direction: column; gap: 8px;"></div>
@@ -407,7 +404,6 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // 카카오 SDK 초기화 (사용자분의 앱 JavaScript 키 입력 완료)
     Kakao.init('8184d0e9803bba30ca60b292eec7bda4');
 
     let players = [];
@@ -433,82 +429,32 @@
     let attendanceChartInstance = null;
     let indivAvgChartInstance = null;
 
+    // 최신 카카오 SDK v2 방식으로 로그인 처리 (authorize 방식)
     function loginWithKakao() {
-        Kakao.Auth.login({
-            success: function(authObj) {
-                Kakao.API.request({
-                    url: '/v2/user/me',
-                    success: function(res) {
-                        const kakaoId = String(res.id);
-                        const nickname = res.properties && res.properties.nickname ? res.properties.nickname : '볼러';
-                        
-                        // 차단(퇴출)된 회원인지 확인
-                        if (blockedKakaoIds[kakaoId]) {
-                            alert('관리자에 의해 차단(퇴출)된 계정입니다.');
-                            Kakao.Auth.logout();
-                            return;
-                        }
-
-                        localStorage.setItem('connection_kakao_id', kakaoId);
-                        localStorage.setItem('connection_kakao_nickname', nickname);
-                        currentKakaoUser = { id: kakaoId, name: nickname };
-
-                        // 승인된 회원이 아니라면 가입 대기열에 자동 등록 요청
-                        if (!isAdmin && !approvedKakaoIds[kakaoId] && kakaoId !== 'admin_master') {
-                            db.ref('bowling_pendingApprovals/' + kakaoId).set({
-                                name: nickname,
-                                requestedAt: new Date().toLocaleString()
-                            });
-                        }
-
-                        checkAuthAndRender();
-                    },
-                    fail: function(error) {
-                        alert('사용자 정보를 가져오는데 실패했습니다: ' + JSON.stringify(error));
-                    }
-                });
-            },
-            fail: function(err) {
-                alert('카카오 로그인에 실패했습니다: ' + JSON.stringify(err));
-            }
+        Kakao.Auth.authorize({
+            redirectUri: window.location.origin + window.location.pathname
         });
     }
 
-    function loginAsAdminPrompt() {
-        const inputPwd = prompt("관리자 비밀번호를 입력해주세요:");
-        if (inputPwd === null) return;
-        if (inputPwd === adminPassword) {
-            isAdmin = true;
-            currentKakaoUser = { id: 'admin_master', name: '관리자' };
-            localStorage.setItem('connection_kakao_id', 'admin_master');
-            localStorage.setItem('connection_kakao_nickname', '관리자');
-            alert("관리자 권한으로 로그인되었습니다.");
-            checkAuthAndRender();
-            updateAuthUI();
-        } else {
-            alert("관리자 비밀번호가 일치하지 않습니다.");
-        }
-    }
+    // 페이지 로드 시 카카오 로그인 리다이렉트 콜백 및 세션 처리
+    window.onload = async function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
 
-    function logoutKakaoSession() {
-        if (Kakao.Auth.getAccessToken()) {
-            Kakao.Auth.logout(() => {});
+        if (code) {
+            // 주소창의 code 파라미터 정리
+            window.history.replaceState({}, document.title, window.location.pathname);
         }
-        localStorage.removeItem('connection_kakao_id');
-        localStorage.removeItem('connection_kakao_nickname');
-        isAdmin = false;
-        currentKakaoUser = null;
-        location.reload();
-    }
 
-    window.onload = function() {
         const savedId = localStorage.getItem('connection_kakao_id');
         const savedNick = localStorage.getItem('connection_kakao_nickname');
+
         if (savedId) {
             currentKakaoUser = { id: savedId, name: savedNick || '볼러' };
             if (savedId === 'admin_master') isAdmin = true;
         }
 
+        // Firebase 데이터 연동 먼저 수행
         db.ref('bowling_approvedKakaoIds').on('value', (snapshot) => {
             approvedKakaoIds = snapshot.val() || {};
             checkAuthAndRender();
@@ -591,7 +537,63 @@
                 document.getElementById('waitingNoticeCard').style.display = 'block';
             }
         });
+
+        // 만약 카카오 액세스 토큰이 활성화되어 있다면 사용자 정보 가져오기
+        if (Kakao.Auth.getAccessToken()) {
+            try {
+                let res = await Kakao.API.request({ url: '/v2/user/me' });
+                const kakaoId = String(res.id);
+                const nickname = res.properties && res.properties.nickname ? res.properties.nickname : '볼러';
+
+                if (blockedKakaoIds[kakaoId]) {
+                    alert('관리자에 의해 차단(퇴출)된 계정입니다.');
+                    logoutKakaoSession();
+                    return;
+                }
+
+                localStorage.setItem('connection_kakao_id', kakaoId);
+                localStorage.setItem('connection_kakao_nickname', nickname);
+                currentKakaoUser = { id: kakaoId, name: nickname };
+
+                if (!isAdmin && !approvedKakaoIds[kakaoId] && kakaoId !== 'admin_master') {
+                    db.ref('bowling_pendingApprovals/' + kakaoId).set({
+                        name: nickname,
+                        requestedAt: new Date().toLocaleString()
+                    });
+                }
+                checkAuthAndRender();
+            } catch (err) {
+                console.error(err);
+            }
+        }
     };
+
+    function loginAsAdminPrompt() {
+        const inputPwd = prompt("관리자 비밀번호를 입력해주세요:");
+        if (inputPwd === null) return;
+        if (inputPwd === adminPassword) {
+            isAdmin = true;
+            currentKakaoUser = { id: 'admin_master', name: '관리자' };
+            localStorage.setItem('connection_kakao_id', 'admin_master');
+            localStorage.setItem('connection_kakao_nickname', '관리자');
+            alert("관리자 권한으로 로그인되었습니다.");
+            checkAuthAndRender();
+            updateAuthUI();
+        } else {
+            alert("관리자 비밀번호가 일치하지 않습니다.");
+        }
+    }
+
+    function logoutKakaoSession() {
+        if (Kakao.Auth.getAccessToken()) {
+            Kakao.Auth.logout(() => {});
+        }
+        localStorage.removeItem('connection_kakao_id');
+        localStorage.removeItem('connection_kakao_nickname');
+        isAdmin = false;
+        currentKakaoUser = null;
+        location.reload();
+    }
 
     function checkAuthAndRender() {
         if (!currentKakaoUser) {
@@ -602,7 +604,6 @@
             return;
         }
 
-        // 관리자이거나 승인된 카카오 ID인 경우 프리패스
         if (isAdmin || currentKakaoUser.id === 'admin_master' || approvedKakaoIds[currentKakaoUser.id]) {
             document.getElementById('authOverlay').style.display = 'none';
             document.getElementById('mainContainer').style.display = 'block';
@@ -611,7 +612,6 @@
             return;
         }
 
-        // 승인 대기 중 화면 표시
         document.getElementById('authOverlay').style.display = 'flex';
         document.getElementById('loginCardView').style.display = 'none';
         document.getElementById('pendingCardView').style.display = 'block';
@@ -653,7 +653,6 @@
         updates['bowling_approvedKakaoIds/' + kakaoId] = true;
         updates['bowling_pendingApprovals/' + kakaoId] = null;
         
-        // 회원 명부에도 이름이 없으면 자동 추가
         if (!players.some(p => p.name === name)) {
             players.push({ id: Date.now(), name: name, score: 150, checked: true, isAuto: false, isDummy: false });
             updates['bowling_players'] = players;
@@ -672,7 +671,6 @@
         }
     }
 
-    // [퇴출 기능] 회원을 차단하고 승인 해제 및 명부에서 제거
     function kickUser(kakaoId, name, playerDbId) {
         if (confirm(`'${name}'님을 클럽에서 퇴출(차단)하시겠습니까?`)) {
             let updates = {};
@@ -881,10 +879,8 @@
     function removePlayer(id) {
         const player = players.find(p => p.id === id);
         if (!player) return;
-        // 카카오 ID 매칭 확인하여 퇴출 함수로 연동
         let targetKakaoId = '';
         Object.keys(approvedKakaoIds).forEach(kId => {
-            // 편의상 명부 이름과 매칭
             if(player.name) targetKakaoId = kId; 
         });
         kickUser(targetKakaoId || 'unknown', player.name, id);
@@ -1150,35 +1146,6 @@
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `전체DB_백업.csv`;
         link.click();
-    }
-
-    function importCSV(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const rows = e.target.result.split('\n').map(r => r.trim()).filter(r => r);
-            if (rows.length < 2) return alert('형식이 잘못되었습니다.');
-            let newMap = {};
-            for (let i = 1; i < rows.length; i++) {
-                const cols = rows[i].split(',');
-                if (cols.length < 8) continue;
-                const date = cols[0].trim(), name = cols[1].trim();
-                if (!date || !name || date.includes('위')) continue;
-                if (!newMap[date]) newMap[date] = { id: Date.now() + Math.random(), date, records: [] };
-                newMap[date].records.push({ name, g1: parseFloat(cols[2])||0, g2: parseFloat(cols[3])||0, g3: parseFloat(cols[4])||0, g4: parseFloat(cols[5])||0, total: parseFloat(cols[6])||0, avg: (parseFloat(cols[7])||0).toFixed(1), coverCount: 0 });
-            }
-            Object.keys(newMap).forEach(d => {
-                newMap[d].records.sort((a,b)=>b.total-a.total);
-                let idx = history.findIndex(h => h.date.startsWith(d.split(' ')[0]));
-                if (idx !== -1) { history[idx].records = newMap[d].records; } else { history.push(newMap[d]); }
-            });
-            history.sort((a,b)=>b.date.localeCompare(a.date));
-            syncHistoryToDB();
-            alert('업로드 완료!');
-            event.target.value = '';
-        };
-        reader.readAsText(file, 'utf-8');
     }
 
     function deleteHistory(id) {
