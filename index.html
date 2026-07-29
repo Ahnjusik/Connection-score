@@ -66,6 +66,8 @@
         button.danger:hover { background-color: #dc2626; }
         button.warning { background-color: #d97706; }
         button.warning:hover { background-color: #b45309; }
+        button.kakao { background-color: #fee500; color: #191919; }
+        button.kakao:hover { background-color: #fada0a; }
         .btn-container { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
         .list-header { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); font-weight: 600; font-size: 14px; color: #64748b; flex-wrap: wrap; gap: 8px; }
         .player-list { max-height: 250px; overflow-y: auto; margin-top: 8px; transition: max-height 0.3s ease; }
@@ -308,7 +310,10 @@
                             <label style="font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; color: #b91c1c;">
                                 <input type="checkbox" id="excludeGuests" onchange="renderClubStatsTable()" style="width: 16px; height: 16px; cursor: pointer;" checked> 탈퇴/게스트 회원 제외 (더미, 용병 등)
                             </label>
-                            <button class="success" onclick="exportClubStatsExcel()" style="padding: 6px 12px; font-size: 13px;">📥 엑셀(CSV) 다운로드</button>
+                            <div style="display: flex; gap: 6px;">
+                                <button class="success" onclick="exportClubStatsExcel()" style="padding: 6px 10px; font-size: 13px;">📥 엑셀 다운</button>
+                                <button class="kakao" onclick="shareClubStatsKakao()" style="padding: 6px 10px; font-size: 13px; font-weight: bold;">💬 카카오톡 공유</button>
+                            </div>
                         </div>
                     </div>
 
@@ -1083,10 +1088,11 @@
 
             return `
             <div class="history-box">
-                <div style="display: flex; justify-content: space-between; border-bottom: 2px solid var(--primary-color); padding-bottom: 6px; margin-bottom: 10px; align-items: center;">
+                <div style="display: flex; justify-content: space-between; border-bottom: 2px solid var(--primary-color); padding-bottom: 6px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; gap: 8px;">
                     <strong style="font-size: 16px; color: var(--primary-color);">📅 ${h.date}</strong>
-                    <div>
-                        <button class="success" onclick="exportToExcel(${h.id})" style="padding: 4px 8px; font-size: 12px; margin-right: 5px;">📥 엑셀 다운</button>
+                    <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                        <button class="kakao" onclick="shareHistoryKakao(${h.id})" style="padding: 4px 10px; font-size: 12px; font-weight: bold;">💬 카카오톡 공유</button>
+                        <button class="success" onclick="exportToExcel(${h.id})" style="padding: 4px 8px; font-size: 12px;">📥 엑셀 다운</button>
                         <button class="delete-btn" onclick="checkPasswordAndExecute(() => deleteHistory(${h.id}))" style="padding: 4px 8px; font-size: 12px;">기록 삭제</button>
                     </div>
                 </div>
@@ -1457,7 +1463,7 @@
         renderClubStatsTable();
     }
 
-    function renderClubStatsTable() {
+    function getClubStatsArrayData() {
         const startMonth = document.getElementById('clubStatStartMonth').value;
         const endMonth = document.getElementById('clubStatEndMonth').value;
         const excludeGuests = document.getElementById('excludeGuests').checked;
@@ -1516,7 +1522,11 @@
         });
 
         clubStatsArray.sort((a, b) => b.avg - a.avg);
+        return { clubStatsArray, startMonth, endMonth };
+    }
 
+    function renderClubStatsTable() {
+        const { clubStatsArray } = getClubStatsArrayData();
         const tbody = document.getElementById('clubStatsTableBody');
         if (clubStatsArray.length === 0) {
             tbody.innerHTML = `<tr><td colspan="7" style="padding: 30px; color: #94a3b8;">조건에 해당하는 회원 기록이 없습니다.</td></tr>`;
@@ -1536,53 +1546,73 @@
         `).join('');
     }
 
-    function exportClubStatsExcel() {
-        const startMonth = document.getElementById('clubStatStartMonth').value;
-        const endMonth = document.getElementById('clubStatEndMonth').value;
-        const excludeGuests = document.getElementById('excludeGuests').checked;
+    function shareClubStatsKakao() {
+        const { clubStatsArray, startMonth, endMonth } = getClubStatsArrayData();
+        if (clubStatsArray.length === 0) return alert('공유할 통계 데이터가 없습니다.');
 
-        const filteredHistory = history.filter(h => {
-            const mMatch = h.date.match(/^(\d{4}[-./]\d{2})/);
-            if (!mMatch) return true;
-            const hMonth = mMatch[1].replace(/[-/]/g, '-');
-            if (startMonth && hMonth < startMonth) return false;
-            if (endMonth && hMonth > endMonth) return false;
-            return true;
+        let periodStr = (startMonth && endMonth) ? `[조회 기간: ${startMonth} ~ ${endMonth}]` : `[전체 기간 통계]`;
+        let text = `🎳 [Bowling Connection 클럽원 순위 통계]\n${periodStr}\n---------------------------\n`;
+        
+        clubStatsArray.forEach((item, idx) => {
+            text += `${idx + 1}위 | ${item.name} | 에버: ${item.avg.toFixed(1)}점 (High: ${item.high} / Low: ${item.low}) | ${item.games}게임\n`;
         });
+        text += `---------------------------\n💡 Connection 볼링 클럽 관리 시스템`;
 
-        let statsMap = {};
-        filteredHistory.forEach(h => {
-            if (!h || !h.records) return;
-            h.records.forEach(r => {
-                const name = r.name;
-                if (excludeGuests && (name.includes('더미') || name.includes('휴식') || name.includes('용병') || name.includes('게스트') || name.includes('탈퇴'))) return;
-                if (!statsMap[name]) {
-                    statsMap[name] = { name: name, totalAvgSum: 0, avgCount: 0, high: 0, low: 999, totalGames: 0 };
-                }
-                const avgVal = parseFloat(r.avg);
-                if (!isNaN(avgVal) && avgVal > 0) {
-                    statsMap[name].totalAvgSum += avgVal;
-                    statsMap[name].avgCount++;
-                }
-                [r.g1, r.g2, r.g3, r.g4].forEach(g => {
-                    let score = parseFloat(g);
-                    if (!isNaN(score) && score > 0) {
-                        if (score > statsMap[name].high) statsMap[name].high = score;
-                        if (score < statsMap[name].low) statsMap[name].low = score;
-                        statsMap[name].totalGames++;
-                    }
-                });
+        copyTextAndAlert(text, "클럽원 순위 및 통계 내용이 클립보드에 복사되었습니다!\n카카오톡 채팅창에 붙여넣기(Ctrl+V) 하세요.");
+    }
+
+    function shareHistoryKakao(id) {
+        const record = history.find(h => h.id === id);
+        if (!record) return;
+
+        let text = `🎳 [Bowling Connection 정모 상세 기록]\n📅 날짜: ${record.date}\n---------------------------\n`;
+        record.records.forEach((r, idx) => {
+            let covers = [];
+            if(r.c1) covers.push('1G');
+            if(r.c2) covers.push('2G');
+            if(r.c3) covers.push('3G');
+            if(r.c4) covers.push('4G');
+            let coverStr = covers.length > 0 ? ` (올커버: ${covers.join(', ')})` : '';
+
+            text += `${idx + 1}위 | ${r.name} | 총점: ${r.total}점 (평균: ${r.avg})${coverStr}\n`;
+            text + `   └ 1G:${r.g1} | 2G:${r.g2} | 3G:${r.g3} | 4G:${r.g4}\n`;
+        });
+        text += `---------------------------\n💡 Connection 볼링 클럽 관리 시스템`;
+
+        copyTextAndAlert(text, "해당 정모 기록이 클립보드에 복사되었습니다!\n카카오톡 채팅창에 붙여넣기(Ctrl+V) 하세요.");
+    }
+
+    function copyTextAndAlert(text, alertMsg) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert(alertMsg);
+            }).catch(() => {
+                fallbackCopyText(text, alertMsg);
             });
-        });
+        } else {
+            fallbackCopyText(text, alertMsg);
+        }
+    }
 
-        let clubStatsArray = Object.values(statsMap).map(item => {
-            let overallAvg = item.avgCount > 0 ? (item.totalAvgSum / item.avgCount).toFixed(1) : 0;
-            let lowScore = item.low === 999 ? 0 : item.low;
-            let diff = (item.high > 0 && lowScore > 0) ? (item.high - lowScore) : 0;
-            return { name: item.name, avg: parseFloat(overallAvg), high: item.high, low: lowScore, diff: diff, games: item.totalGames };
-        });
-        clubStatsArray.sort((a, b) => b.avg - a.avg);
+    function fallbackCopyText(text, alertMsg) {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";  
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        try {
+            const successful = document.execCommand('copy');
+            if (successful) alert(alertMsg);
+            else alert("복사에 실패했습니다. 직접 복사해주세요.");
+        } catch (err) {
+            alert("복사 기능을 지원하지 않는 브라우저입니다.");
+        }
+        document.body.removeChild(textarea);
+    }
 
+    function exportClubStatsExcel() {
+        const { clubStatsArray } = getClubStatsArrayData();
         if (clubStatsArray.length === 0) return alert('다운로드할 통계 데이터가 없습니다.');
 
         let csvContent = '\uFEFF';
