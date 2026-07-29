@@ -19,7 +19,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
-    <!-- 카카오 공유 SDK 추가 (integrity 및 crossorigin 속성 제거로 차단 문제 해결) -->
+    <!-- 카카오 공유 및 로그인 SDK 추가 -->
     <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js"></script>
 
     <style>
@@ -34,13 +34,13 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px; }
         .container { max-width: 950px; margin: 0 auto; display: none; }
         
+        /* 로그인 오버레이 스타일 */
         #authOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.85); display: flex; justify-content: center; align-items: center; z-index: 9999; backdrop-filter: blur(5px); }
         .auth-card { background: white; padding: 35px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: 100%; max-width: 380px; text-align: center; }
         .auth-card h2 { margin-top: 0; color: var(--primary-color); margin-bottom: 10px; }
-        .auth-card p { font-size: 14px; color: #64748b; margin-bottom: 20px; }
-        .auth-card input { width: 100%; padding: 12px; font-size: 16px; text-align: center; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 15px; box-sizing: border-box; }
-        .auth-card button { width: 100%; padding: 12px; font-size: 16px; background-color: var(--primary-color); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
-        .auth-card button:hover { background-color: #1d4ed8; }
+        .auth-card p { font-size: 14px; color: #64748b; margin-bottom: 25px; }
+        .kakao-login-btn { width: 100%; padding: 12px; font-size: 16px; background-color: #fee500; color: #191919; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: background-color 0.2s; }
+        .kakao-login-btn:hover { background-color: #fada0a; }
 
         .header-box { display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; }
         .club-logo { width: 75px; height: 75px; object-fit: contain; border-radius: 50%; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); background: white; padding: 4px; border: 2px solid var(--border-color); }
@@ -121,12 +121,15 @@
 </head>
 <body>
 
+    <!-- 카카오 로그인 오버레이 (비밀번호 인증 대체) -->
     <div id="authOverlay">
         <div class="auth-card">
             <h2>🎳 Connection</h2>
-            <p>클럽 회원 전용 시스템입니다.<br>입장 비밀번호를 입력해 주세요.</p>
-            <input type="password" id="accessPasswordInput" placeholder="비밀번호 입력" autofocus>
-            <button onclick="verifyAccessPassword()">입장하기</button>
+            <p>클럽 회원 전용 시스템입니다.<br>카카오 계정으로 간편하게 로그인해 주세요.</p>
+            <button class="kakao-login-btn" onclick="loginWithKakao()">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M9 1C4.58172 1 1 3.81422 1 7.29412C1 9.47953 2.38503 11.4111 4.54572 12.5516L3.6766 15.7725C3.59021 16.0917 3.95759 16.3475 4.23812 16.1557L8.0694 13.5673C8.37525 13.6015 8.68535 13.619 10 13.619C14.4183 13.619 18 10.8048 18 7.32485C18 3.84491 14.4183 1 10 1" fill="#191919"/></svg>
+                카카오로 1초 로그인 / 시작하기
+            </button>
         </div>
     </div>
 
@@ -139,7 +142,7 @@
     <div id="loadingMsg">📡 데이터베이스와 연결 중입니다...</div>
 
     <div class="auth-bar" id="authBar">
-        <span>현재 접속 모드: <strong id="modeIndicator" style="color: var(--primary-color);">일반 회원 모드</strong></span>
+        <span>현재 접속 모드: <strong id="modeIndicator" style="color: var(--primary-color);">일반 회원 모드</strong> <span id="userInfoDisplay" style="font-size: 13px; color: #64748b; margin-left: 8px;"></span></span>
         <button id="authSwitchBtn" onclick="toggleAuthMode()" style="padding: 6px 14px; font-size: 13px;">관리자 모드로 전환</button>
     </div>
 
@@ -423,26 +426,32 @@
     let attendanceChartInstance = null;
     let indivAvgChartInstance = null;
 
-    document.getElementById('accessPasswordInput').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') verifyAccessPassword();
-    });
-
-    function verifyAccessPassword() {
-        const inputVal = document.getElementById('accessPasswordInput').value.trim();
-        if (inputVal === adminPassword) {
-            isAdmin = true;
-            document.getElementById('authOverlay').style.display = 'none';
-            document.getElementById('mainContainer').style.display = 'block';
-            updateAuthUI();
-        } else if (inputVal === accessPassword) {
-            isAdmin = false;
-            document.getElementById('authOverlay').style.display = 'none';
-            document.getElementById('mainContainer').style.display = 'block';
-            updateAuthUI();
+    // 카카오 로그인 실행 함수
+    function loginWithKakao() {
+        if (window.Kakao && Kakao.isInitialized()) {
+            Kakao.Auth.login({
+                success: function(authObj) {
+                    Kakao.API.request({
+                        url: '/v2/user/me',
+                        success: function(res) {
+                            const nickname = res.properties ? res.properties.nickname : '회원';
+                            document.getElementById('authOverlay').style.display = 'none';
+                            document.getElementById('mainContainer').style.display = 'block';
+                            document.getElementById('userInfoDisplay').innerText = `(로그인: ${nickname}님)`;
+                            isAdmin = false;
+                            updateAuthUI();
+                        },
+                        fail: function(error) {
+                            alert('사용자 정보를 가져오지 못했습니다: ' + JSON.stringify(error));
+                        }
+                    });
+                },
+                fail: function(err) {
+                    alert('카카오 로그인에 실패했습니다: ' + JSON.stringify(err));
+                },
+            });
         } else {
-            alert("비밀번호가 틀렸습니다. 올바른 비밀번호를 입력해주세요.");
-            document.getElementById('accessPasswordInput').value = '';
-            document.getElementById('accessPasswordInput').focus();
+            alert('카카오 SDK가 초기화되지 않았습니다. 잠시 후 다시 시도해주세요.');
         }
     }
 
@@ -1750,7 +1759,7 @@
 
         let csvContent = '\uFEFF';
         csvContent += "순위,회원명,누적에버리지,최고점(High),최저점(Low),편차(Low-High),총게임수\n";
-        clubStatsArray.forEach((item, idx) => {
+        clubStatsArray.sort((a, b) => b.avg - a.avg).forEach((item, idx) => {
             csvContent += `${idx + 1}위,${item.name},${item.avg.toFixed(1)},${item.high},${item.low},${item.diff},${item.games}게임\n`;
         });
 
