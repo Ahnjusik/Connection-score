@@ -60,6 +60,9 @@
         button.success:hover { background-color: #15803d; }
         button.danger { background-color: #ef4444; }
         button.danger:hover { background-color: #dc2626; }
+        button.kakao-share { background-color: #fee500; color: #191919; }
+        button.kakao-share:hover { background-color: #fada0a; }
+
         .btn-container { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
         .list-header { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); font-weight: 600; font-size: 14px; color: #64748b; flex-wrap: wrap; gap: 8px; }
         .player-list { max-height: 250px; overflow-y: auto; margin-top: 8px; transition: max-height 0.3s ease; }
@@ -206,7 +209,10 @@
         <div class="card" id="resultCard" style="display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                 <h3 style="margin: 0;">2. 게임별 실시간 팀 매칭 & 스코어 기록 (실시간 공유)</h3>
-                <button class="danger" id="cancelMatchBtn" onclick="cancelMatch()" style="padding: 6px 12px; font-size: 13px; display: none;">🛑 당일 정모 취소 (대기 상태로)</button>
+                <div style="display: flex; gap: 8px;">
+                    <button class="kakao-share" onclick="shareMatchToKakao()" style="padding: 6px 12px; font-size: 13px; font-weight: 600;">💬 카카오톡 공유</button>
+                    <button class="danger" id="cancelMatchBtn" onclick="cancelMatch()" style="padding: 6px 12px; font-size: 13px; display: none;">🛑 당일 정모 취소</button>
+                </div>
             </div>
 
             <div class="team-mode-bar">
@@ -651,16 +657,50 @@
         }
     }
 
-    // 영구 차단 없이 명부에서만 깔끔하게 삭제하는 함수
+    // 관리자 확인 후 명부에서 삭제하는 기능
     function removePlayer(id) {
         const player = players.find(p => p.id === id);
         if (!player) return;
         
-        if (confirm(`'${player.name}'님을 명부에서 삭제하시겠습니까?`)) {
-            players = players.filter(p => p.id !== id);
-            syncPlayersToDB();
-            alert(`${player.name}님이 명부에서 삭제되었습니다.`);
+        checkPasswordAndExecute(() => {
+            if (confirm(`'${player.name}'님을 명부에서 삭제하시겠습니까?`)) {
+                players = players.filter(p => p.id !== id);
+                syncPlayersToDB();
+                alert(`${player.name}님이 명부에서 삭제되었습니다.`);
+            }
+        });
+    }
+
+    // 카카오톡 공유 기능 (현재 팀 매칭 및 점수 현황 요약 전송)
+    function shareMatchToKakao() {
+        let summaryText = "🎳 [Bowling Connection 정모 현황]\n\n";
+        
+        // 각 팀 정보 구성
+        const teamBoxes = document.querySelectorAll('.team-box');
+        if (teamBoxes.length > 0) {
+            teamBoxes.forEach((box, idx) => {
+                const title = box.querySelector('h3').innerText;
+                const stats = box.querySelector('.team-stats').innerText;
+                summaryText += `📌 ${title} (${stats})\n`;
+                
+                const members = box.querySelectorAll('.team-member');
+                members.forEach(m => {
+                    summaryText += `  • ${m.innerText.replace('\n', ': ')}\n`;
+                });
+                summaryText += "\n";
+            });
+        } else {
+            summaryText += "현재 진행 중인 팀 매칭 정보가 없습니다.";
         }
+
+        Kakao.Share.sendDefault({
+            objectType: 'text',
+            text: summaryText.trim(),
+            link: {
+                mobileWebUrl: window.location.href,
+                webUrl: window.location.href,
+            },
+        });
     }
 
     function toggleAuthMode() {
