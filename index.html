@@ -111,7 +111,6 @@
 </head>
 <body>
 
-    <!-- 카카오 로그인 및 승인 대기 오버레이 -->
     <div id="authOverlay">
         <div class="auth-card" id="loginCardView">
             <h2>🎳 Connection</h2>
@@ -429,20 +428,19 @@
     let attendanceChartInstance = null;
     let indivAvgChartInstance = null;
 
-    // 최신 카카오 SDK v2 방식으로 로그인 처리 (authorize 방식)
+    // 고정된 올바른 리다이렉트 URI 경로 지정 (KOE101 에러 방지)
     function loginWithKakao() {
+        const currentUri = window.location.origin + window.location.pathname;
         Kakao.Auth.authorize({
-            redirectUri: window.location.origin + window.location.pathname
+            redirectUri: currentUri
         });
     }
 
-    // 페이지 로드 시 카카오 로그인 리다이렉트 콜백 및 세션 처리
     window.onload = async function() {
         const urlParams = new URLSearchParams(window.location.search);
         const code = urlParams.get('code');
 
         if (code) {
-            // 주소창의 code 파라미터 정리
             window.history.replaceState({}, document.title, window.location.pathname);
         }
 
@@ -454,7 +452,6 @@
             if (savedId === 'admin_master') isAdmin = true;
         }
 
-        // Firebase 데이터 연동 먼저 수행
         db.ref('bowling_approvedKakaoIds').on('value', (snapshot) => {
             approvedKakaoIds = snapshot.val() || {};
             checkAuthAndRender();
@@ -538,7 +535,6 @@
             }
         });
 
-        // 만약 카카오 액세스 토큰이 활성화되어 있다면 사용자 정보 가져오기
         if (Kakao.Auth.getAccessToken()) {
             try {
                 let res = await Kakao.API.request({ url: '/v2/user/me' });
