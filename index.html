@@ -403,7 +403,8 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    Kakao.init('8184d0e9803bba30ca60b292eec7bda4');
+    // 💡 사용자의 실제 JavaScript 키 반영 완료
+    Kakao.init('12ba06b035aec27dddf5674111077d4d');
 
     let players = [];
     let matchResults = []; 
@@ -428,7 +429,6 @@
     let attendanceChartInstance = null;
     let indivAvgChartInstance = null;
 
-    // 고정된 올바른 리다이렉트 URI 경로 지정 (KOE101 에러 방지)
     function loginWithKakao() {
         const currentUri = window.location.origin + window.location.pathname;
         Kakao.Auth.authorize({
