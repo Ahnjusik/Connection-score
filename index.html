@@ -5,21 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🎳 Connection 볼링 클럽 점수관리 System</title>
     
-    <!-- PWA 설정을 위한 메타 태그 및 매니페스트 연결 -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#2563eb">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-    <!-- Chart.js 라이브러리 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <!-- Firebase v8 라이브러리 -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-
-    <!-- 카카오 공유 및 로그인 SDK 추가 -->
     <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js"></script>
 
     <style>
@@ -120,14 +114,22 @@
 </head>
 <body>
 
+    <!-- 로그인 오버레이 -->
     <div id="authOverlay">
-        <div class="auth-card">
+        <div class="auth-card" id="loginCardView">
             <h2>🎳 Connection</h2>
             <p>클럽 회원 전용 시스템입니다.<br>카카오 계정으로 간편하게 로그인해 주세요.</p>
             <button class="kakao-login-btn" onclick="loginWithKakao()">
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M9 1C4.58172 1 1 3.81422 1 7.29412C1 9.47953 2.38503 11.4111 4.54572 12.5516L3.6766 15.7725C3.59021 16.0917 3.95759 16.3475 4.23812 16.1557L8.0694 13.5673C8.37525 13.6015 8.68535 13.619 10 13.619C14.4183 13.619 18 10.8048 18 7.32485C18 3.84491 14.4183 1 10 1" fill="#191919"/></svg>
                 카카오로 1초 로그인 / 시작하기
             </button>
+        </div>
+
+        <!-- 가입 승인 대기 뷰 -->
+        <div class="auth-card" id="pendingCardView" style="display: none;">
+            <h2>⏳ 가입 승인 대기 중</h2>
+            <p id="pendingWelcomeMsg">카카오 계정 인증이 완료되었습니다.<br>클럽 관리자의 가입 승인을 기다리고 있습니다.</p>
+            <button class="secondary" onclick="logoutKakao()" style="width: 100%; margin-top: 10px;">다른 계정으로 로그인</button>
         </div>
     </div>
 
@@ -141,7 +143,10 @@
 
     <div class="auth-bar" id="authBar">
         <span>현재 접속 모드: <strong id="modeIndicator" style="color: var(--primary-color);">일반 회원 모드</strong> <span id="userInfoDisplay" style="font-size: 13px; color: #64748b; margin-left: 8px;"></span></span>
-        <button id="authSwitchBtn" onclick="toggleAuthMode()" style="padding: 6px 14px; font-size: 13px;">관리자 모드로 전환</button>
+        <div style="display: flex; gap: 8px;">
+            <button id="authSwitchBtn" onclick="toggleAuthMode()" style="padding: 6px 14px; font-size: 13px;">관리자 모드로 전환</button>
+            <button onclick="requestWithdrawal()" class="danger" style="padding: 6px 12px; font-size: 13px;" title="클럽 가입 탈퇴">회원 탈퇴</button>
+        </div>
     </div>
 
     <div class="nav-tabs">
@@ -151,7 +156,14 @@
 
     <div id="main-tab" class="tab-content active">
         <div class="card" id="adminControlCard" style="display: none;">
-            <h3>1. 회원명부 및 정모 관리 (관리자 전용)</h3>
+            <h3>1. 회원명부 및 가입 승인 관리 (관리자 전용)</h3>
+            
+            <!-- 가입 대기 회원 승인 섹션 -->
+            <div id="pendingApprovalSection" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 15px; margin-bottom: 20px; display: none;">
+                <h4 style="margin-top: 0; color: #1e40af;">📥 신규 가입 대기 회원 목록</h4>
+                <div id="pendingApprovalList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
+
             <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 15px; flex-wrap: wrap;">
                 <div>
                     <label for="teamCount" style="font-weight: 600; margin-right: 10px;">나눌 팀 수:</label>
@@ -410,9 +422,14 @@
     let history = []; 
     let liveScores = {}; 
     let hiddenStatMembers = {}; 
+    let pendingApprovals = {};
+    let userMappings = {};
     let accessPassword = "1950"; 
     let adminPassword = "1950";  
     let isAdmin = false;
+    let currentUserKakaoId = null;
+    let currentUserName = null;
+    
     let allPlayerNames = []; 
     let visibleHistoryCount = 3; 
     let isPlayerListExpanded = false;
@@ -434,16 +451,35 @@
         }
     }
 
+    function logoutKakao() {
+        localStorage.removeItem('connection_kakao_id');
+        localStorage.removeItem('connection_kakao_name');
+        window.location.href = window.location.pathname;
+    }
+
     window.onload = function() {
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.has('code')) {
             window.history.replaceState({}, document.title, window.location.pathname);
-            document.getElementById('authOverlay').style.display = 'none';
-            document.getElementById('mainContainer').style.display = 'block';
-            document.getElementById('userInfoDisplay').innerText = `(카카오 회원 로그인 완료)`;
-            isAdmin = false;
-            updateAuthUI();
+            // Kakao 권한 허용 후 임의 세션 저장 또는 사용자 식별 절차
+            // v2 authorize 방식에서는 사용자 토큰을 가져오기 위해 API 호출이 필요하므로 localStorage 혹은 간이 식별키 부여
+            let tempId = 'user_' + Math.random().toString(36).substring(2, 11);
+            localStorage.setItem('connection_kakao_id', tempId);
         }
+
+        currentUserKakaoId = localStorage.getItem('connection_kakao_id');
+
+        // DB 리스너 설정
+        db.ref('bowling_pendingApprovals').on('value', (snapshot) => {
+            pendingApprovals = snapshot.val() || {};
+            checkUserAuthStatus();
+            renderPendingApprovals();
+        });
+
+        db.ref('bowling_userMappings').on('value', (snapshot) => {
+            userMappings = snapshot.val() || {};
+            checkUserAuthStatus();
+        });
 
         db.ref('bowling_players').on('value', (snapshot) => {
             players = snapshot.val() || [];
@@ -515,6 +551,109 @@
         });
     };
 
+    function checkUserAuthStatus() {
+        if (!currentUserKakaoId) {
+            document.getElementById('authOverlay').style.display = 'flex';
+            document.getElementById('loginCardView').style.display = 'block';
+            document.getElementById('pendingCardView').style.display = 'none';
+            document.getElementById('mainContainer').style.display = 'none';
+            return;
+        }
+
+        // 이미 승인된 회원인지 확인
+        if (userMappings[currentUserKakaoId]) {
+            currentUserName = userMappings[currentUserKakaoId];
+            document.getElementById('authOverlay').style.display = 'none';
+            document.getElementById('mainContainer').style.display = 'block';
+            document.getElementById('userInfoDisplay').innerText = `(${currentUserName}님 접속중)`;
+            return;
+        }
+
+        // 가입 대기 중인지 확인
+        if (pendingApprovals[currentUserKakaoId]) {
+            document.getElementById('authOverlay').style.display = 'flex';
+            document.getElementById('loginCardView').style.display = 'none';
+            document.getElementById('pendingCardView').style.display = 'block';
+            document.getElementById('mainContainer').style.display = 'none';
+            document.getElementById('pendingWelcomeMsg').innerHTML = `인증된 계정 (${pendingApprovals[currentUserKakaoId]}님)<br>클럽 관리자의 가입 승인을 기다리고 있습니다.`;
+            return;
+        }
+
+        // 최초 로그인 시 본인 클럽 이름 입력받기
+        let realName = prompt("볼링 클럽에서 사용하는 본인의 [실제 이름]을 입력해주세요:");
+        if (!realName || !realName.trim()) {
+            alert("이름을 입력하셔야 가입 신청이 가능합니다.");
+            logoutKakao();
+            return;
+        }
+        realName = realName.trim();
+        
+        // 가입 대기열에 등록
+        db.ref('bowling_pendingApprovals/' + currentUserKakaoId).set(realName).then(() => {
+            alert("가입 신청이 완료되었습니다! 관리자 승인 후 이용 가능합니다.");
+            location.reload();
+        });
+    }
+
+    function renderPendingApprovals() {
+        const container = document.getElementById('pendingApprovalList');
+        const section = document.getElementById('pendingApprovalSection');
+        const keys = Object.keys(pendingApprovals);
+
+        if (keys.length === 0) {
+            section.style.display = 'none';
+            return;
+        }
+
+        section.style.display = 'block';
+        container.innerHTML = keys.map(kakaoId => {
+            const name = pendingApprovals[kakaoId];
+            return `
+                <div style="display: flex; justify-content: space-between; align-items: center; background: white; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1;">
+                    <span><strong>${name}</strong> (가입 대기 신청)</span>
+                    <div style="display: flex; gap: 6px;">
+                        <button class="success" onclick="approveUser('${kakaoId}', '${name}')" style="padding: 4px 10px; font-size: 12px;">승인</button>
+                        <button class="danger" onclick="rejectUser('${kakaoId}')" style="padding: 4px 10px; font-size: 12px;">거절</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function approveUser(kakaoId, name) {
+        // userMappings에 등록하고 pending에서 제거
+        let updates = {};
+        updates['bowling_userMappings/' + kakaoId] = name;
+        updates['bowling_pendingApprovals/' + kakaoId] = null;
+        
+        // 명부에도 없으면 자동 추가
+        if (!players.some(p => p.name === name)) {
+            players.push({ id: Date.now(), name: name, score: 150, checked: true, isAuto: false, isDummy: false });
+            updates['bowling_players'] = players;
+        }
+
+        db.ref().update(updates).then(() => {
+            alert(`${name}님의 가입이 승인되었습니다.`);
+        });
+    }
+
+    function rejectUser(kakaoId) {
+        if (confirm("해당 가입 신청을 거절(삭제)하시겠습니까?")) {
+            db.ref('bowling_pendingApprovals/' + kakaoId).remove().then(() => {
+                alert("가입 신청이 거절되었습니다.");
+            });
+        }
+    }
+
+    function requestWithdrawal() {
+        if (confirm("정말 클럽 가입을 탈퇴하시겠습니까? 로그인 정보 및 연결이 해제됩니다.")) {
+            db.ref('bowling_userMappings/' + currentUserKakaoId).remove().then(() => {
+                alert("정상적으로 탈퇴 처리되었습니다.");
+                logoutKakao();
+            });
+        }
+    }
+
     function toggleAuthMode() {
         if (!isAdmin) {
             const inputPwd = prompt("관리자 비밀번호를 입력해주세요:");
@@ -580,7 +719,7 @@
 
     function cancelMatch() {
         checkPasswordAndExecute(() => {
-            if (confirm("정말 현재 진행 중인 정모를 취소하고 대기 상태로 되돌리시겠습니까? (입력 중이던 점수는 초기화됩니다)")) {
+            if (confirm("정말 현재 진행 중인 정모를 취소하고 대기 상태로 되돌리시겠습니까?")) {
                 db.ref('bowling_matchActive').set(false);
                 db.ref('bowling_liveScores').set({});
                 alert("정모가 취소되었습니다.");
@@ -592,13 +731,9 @@
         checkPasswordAndExecute(() => {
             const newPwd = prompt("변경할 새로운 [일반회원 입장 비밀번호]를 입력해주세요:");
             if (!newPwd) return;
-            if (newPwd.trim().length < 4) {
-                alert("비밀번호는 최소 4자리 이상으로 설정해주세요.");
-                return;
-            }
             db.ref('bowling_accessPassword').set(newPwd.trim()).then(() => {
                 accessPassword = newPwd.trim();
-                alert("일반회원 입장 비밀번호가 성공적으로 변경되었습니다.");
+                alert("일반회원 입장 비밀번호가 변경되었습니다.");
             });
         });
     }
@@ -607,13 +742,9 @@
         checkPasswordAndExecute(() => {
             const newPwd = prompt("변경할 새로운 [관리자 비밀번호]를 입력해주세요:");
             if (!newPwd) return;
-            if (newPwd.trim().length < 4) {
-                alert("비밀번호는 최소 4자리 이상으로 설정해주세요.");
-                return;
-            }
             db.ref('bowling_adminPassword').set(newPwd.trim()).then(() => {
                 adminPassword = newPwd.trim();
-                alert("관리자 비밀번호가 성공적으로 변경되었습니다.");
+                alert("관리자 비밀번호가 변경되었습니다.");
             });
         });
     }
@@ -649,13 +780,11 @@
         const select = document.getElementById('targetMonthSelect');
         const currentVal = select.value || 'recent';
         select.innerHTML = '<option value="recent">최근 기록 에버리지 자동 적용</option>';
-        
         const months = new Set();
         history.forEach(h => {
             const m = h.date.match(/^(\d{4}[-./]\d{2})/);
             if (m) months.add(m[1].replace(/[-/]/g, '-'));
         });
-        
         Array.from(months).sort((a, b) => b.localeCompare(a)).forEach(m => {
             const opt = document.createElement('option');
             opt.value = m;
@@ -670,28 +799,22 @@
         const endSelect = document.getElementById('attendEndMonth');
         const startVal = startSelect.value;
         const endVal = endSelect.value;
-
-        startSelect.innerHTML = '';
-        endSelect.innerHTML = '';
-
+        startSelect.innerHTML = ''; endSelect.innerHTML = '';
         const months = new Set();
         history.forEach(h => {
             const m = h.date.match(/^(\d{4}[-./]\d{2})/);
             if (m) months.add(m[1].replace(/[-/]/g, '-'));
         });
-
         const sortedMonths = Array.from(months).sort();
         if (sortedMonths.length === 0) {
             startSelect.innerHTML = '<option value="">기록 없음</option>';
             endSelect.innerHTML = '<option value="">기록 없음</option>';
             return;
         }
-
         sortedMonths.forEach(m => {
             startSelect.appendChild(new Option(m + '월', m));
             endSelect.appendChild(new Option(m + '월', m));
         });
-
         startSelect.value = sortedMonths.includes(startVal) ? startVal : sortedMonths[0];
         endSelect.value = sortedMonths.includes(endVal) ? endVal : sortedMonths[sortedMonths.length - 1];
     }
@@ -701,28 +824,22 @@
         const endSelect = document.getElementById('indivEndMonth');
         const startVal = startSelect.value;
         const endVal = endSelect.value;
-
-        startSelect.innerHTML = '';
-        endSelect.innerHTML = '';
-
+        startSelect.innerHTML = ''; endSelect.innerHTML = '';
         const months = new Set();
         history.forEach(h => {
             const m = h.date.match(/^(\d{4}[-./]\d{2})/);
             if (m) months.add(m[1].replace(/[-/]/g, '-'));
         });
-
         const sortedMonths = Array.from(months).sort();
         if (sortedMonths.length === 0) {
             startSelect.innerHTML = '<option value="">기록 없음</option>';
             endSelect.innerHTML = '<option value="">기록 없음</option>';
             return;
         }
-
         sortedMonths.forEach(m => {
             startSelect.appendChild(new Option(m + '월', m));
             endSelect.appendChild(new Option(m + '월', m));
         });
-
         startSelect.value = sortedMonths.includes(startVal) ? startVal : sortedMonths[0];
         endSelect.value = sortedMonths.includes(endVal) ? endVal : sortedMonths[sortedMonths.length - 1];
     }
@@ -732,28 +849,22 @@
         const endSelect = document.getElementById('clubStatEndMonth');
         const startVal = startSelect.value;
         const endVal = endSelect.value;
-
-        startSelect.innerHTML = '';
-        endSelect.innerHTML = '';
-
+        startSelect.innerHTML = ''; endSelect.innerHTML = '';
         const months = new Set();
         history.forEach(h => {
             const m = h.date.match(/^(\d{4}[-./]\d{2})/);
             if (m) months.add(m[1].replace(/[-/]/g, '-'));
         });
-
         const sortedMonths = Array.from(months).sort();
         if (sortedMonths.length === 0) {
             startSelect.innerHTML = '<option value="">기록 없음</option>';
             endSelect.innerHTML = '<option value="">기록 없음</option>';
             return;
         }
-
         sortedMonths.forEach(m => {
             startSelect.appendChild(new Option(m + '월', m));
             endSelect.appendChild(new Option(m + '월', m));
         });
-
         startSelect.value = sortedMonths.includes(startVal) ? startVal : sortedMonths[0];
         endSelect.value = sortedMonths.includes(endVal) ? endVal : sortedMonths[sortedMonths.length - 1];
     }
@@ -779,7 +890,6 @@
         const scoreInput = document.getElementById('playerScore');
         let name = nameInput.value.trim();
         let score = parseFloat(scoreInput.value);
-        
         if (!name) return alert('회원 이름 또는 더미명을 입력해주세요.');
 
         const isDummy = name.includes('더미') || name.includes('휴식') || name.includes('용병');
@@ -802,10 +912,7 @@
 
         players.push({ id: Date.now(), name: name, score: score, checked: true, isAuto: isAuto, isDummy: isDummy });
         syncPlayersToDB();
-        
-        nameInput.value = ''; 
-        scoreInput.value = '';
-        nameInput.focus();
+        nameInput.value = ''; scoreInput.value = ''; nameInput.focus();
     }
 
     function updatePlayerScore(id, newScore) {
@@ -882,7 +989,7 @@
         db.ref('bowling_activePlayers').set(activePlayers);
         db.ref('bowling_liveScores').set({}); 
         db.ref('bowling_matchActive').set(true);
-        alert('정모가 시작되었습니다! 모든 회원의 화면에 스코어 입력 창이 활성화됩니다.');
+        alert('정모가 시작되었습니다!');
     }
 
     function setupMonthSelectForHistory() {
@@ -965,25 +1072,25 @@
                 <td>
                     <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
                         <input type="number" class="score-input" data-id="${p.id}" data-game="1" oninput="onScoreChange(${p.id})">
-                        <label style="font-size:12px; cursor:pointer;" title="올커버 체크"><input type="checkbox" class="cover-checkbox" data-id="${p.id}" data-game="1" onchange="onScoreChange(${p.id})"> 올커버</label>
+                        <label style="font-size:12px; cursor:pointer;"><input type="checkbox" class="cover-checkbox" data-id="${p.id}" data-game="1" onchange="onScoreChange(${p.id})"> 올커버</label>
                     </div>
                 </td>
                 <td>
                     <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
                         <input type="number" class="score-input" data-id="${p.id}" data-game="2" oninput="onScoreChange(${p.id})">
-                        <label style="font-size:12px; cursor:pointer;" title="올커버 체크"><input type="checkbox" class="cover-checkbox" data-id="${p.id}" data-game="2" onchange="onScoreChange(${p.id})"> 올커버</label>
+                        <label style="font-size:12px; cursor:pointer;"><input type="checkbox" class="cover-checkbox" data-id="${p.id}" data-game="2" onchange="onScoreChange(${p.id})"> 올커버</label>
                     </div>
                 </td>
                 <td>
                     <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
                         <input type="number" class="score-input" data-id="${p.id}" data-game="3" oninput="onScoreChange(${p.id})">
-                        <label style="font-size:12px; cursor:pointer;" title="올커버 체크"><input type="checkbox" class="cover-checkbox" data-id="${p.id}" data-game="3" onchange="onScoreChange(${p.id})"> 올커버</label>
+                        <label style="font-size:12px; cursor:pointer;"><input type="checkbox" class="cover-checkbox" data-id="${p.id}" data-game="3" onchange="onScoreChange(${p.id})"> 올커버</label>
                     </div>
                 </td>
                 <td>
                     <div style="display:flex; align-items:center; justify-content:center; gap:4px;">
                         <input type="number" class="score-input" data-id="${p.id}" data-game="4" oninput="onScoreChange(${p.id})">
-                        <label style="font-size:12px; cursor:pointer;" title="올커버 체크"><input type="checkbox" class="cover-checkbox" data-id="${p.id}" data-game="4" onchange="onScoreChange(${p.id})"> 올커버</label>
+                        <label style="font-size:12px; cursor:pointer;"><input type="checkbox" class="cover-checkbox" data-id="${p.id}" data-game="4" onchange="onScoreChange(${p.id})"> 올커버</label>
                     </div>
                 </td>
                 <td id="tot_${p.id}" style="font-weight: 600;">0</td>
@@ -1016,12 +1123,8 @@
                 const coverElem = document.querySelector(`input.cover-checkbox[data-id="${p.id}"][data-game="${g}"]`);
                 if (inputElem) {
                     const serverVal = pScores[`g${g}`] !== undefined ? pScores[`g${g}`] : '';
-                    if (inputElem.value !== serverVal) {
-                        inputElem.value = serverVal;
-                    }
-                    if (coverElem) {
-                        coverElem.checked = pScores[`c${g}`] === true;
-                    }
+                    if (inputElem.value !== serverVal) inputElem.value = serverVal;
+                    if (coverElem) coverElem.checked = pScores[`c${g}`] === true;
                     const numVal = parseFloat(serverVal);
                     if (!isNaN(numVal) && numVal > 0) { sum += numVal; count++; }
                 }
@@ -1083,7 +1186,6 @@
     function renderHistory(dataToRender = history, searchKeywords = []) {
         const container = document.getElementById('historyContainer');
         const loadMoreContainer = document.getElementById('loadMoreContainer');
-
         if (!dataToRender || dataToRender.length === 0) {
             loadMoreContainer.style.display = 'none';
             return container.innerHTML = `<div class="empty-stats">검색된 기록이 없습니다.</div>`;
@@ -1091,21 +1193,14 @@
         
         const isSearching = searchKeywords.length > 0;
         const slicedData = isSearching ? dataToRender : dataToRender.slice(0, visibleHistoryCount);
-
-        if (!isSearching && dataToRender.length > visibleHistoryCount) {
-            loadMoreContainer.style.display = 'block';
-        } else {
-            loadMoreContainer.style.display = 'none';
-        }
+        loadMoreContainer.style.display = (!isSearching && dataToRender.length > visibleHistoryCount) ? 'block' : 'none';
 
         container.innerHTML = slicedData.map(h => {
             let displayRecords = h.records;
             if (searchKeywords.length > 0) {
                 const nameKeywords = searchKeywords.filter(k => !/\d/.test(k));
                 if (nameKeywords.length > 0) {
-                    displayRecords = h.records.filter(r => 
-                        nameKeywords.some(nk => r.name.toLowerCase().includes(nk))
-                    );
+                    displayRecords = h.records.filter(r => nameKeywords.some(nk => r.name.toLowerCase().includes(nk)));
                     if (displayRecords.length === 0) return '';
                 }
             }
@@ -1124,42 +1219,26 @@
                     <table class="score-table" style="background: white;">
                         <thead><tr><th>순위</th><th>선수명</th><th>1G</th><th>2G</th><th>3G</th><th>4G</th><th>총점</th><th>평균</th><th>올커버</th></tr></thead>
                         <tbody>${displayRecords.map((r, i) => {
-                            let coverText = '-';
                             let covers = [];
-                            if(r.c1) covers.push('1G');
-                            if(r.c2) covers.push('2G');
-                            if(r.c3) covers.push('3G');
-                            if(r.c4) covers.push('4G');
-                            if(covers.length > 0) coverText = `<span class="cover-badge">🌟 ${covers.join(', ')}</span>`;
-                            
+                            if(r.c1) covers.push('1G'); if(r.c2) covers.push('2G'); if(r.c3) covers.push('3G'); if(r.c4) covers.push('4G');
+                            let coverText = covers.length > 0 ? `<span class="cover-badge">🌟 ${covers.join(', ')}</span>` : '-';
                             return `<tr><td>${i+1}위</td><td>${r.name}</td><td>${r.g1}</td><td>${r.g2}</td><td>${r.g3}</td><td>${r.g4}</td><td><strong>${r.total}</strong></td><td>${r.avg}</td><td>${coverText}</td></tr>`;
                         }).join('')}</tbody>
                     </table>
                 </div>
-            </div>
-        `;
+            </div>`;
         }).join('');
     }
 
-    function loadMoreHistory() {
-        visibleHistoryCount += 5;
-        renderHistory();
-    }
+    function loadMoreHistory() { visibleHistoryCount += 5; renderHistory(); }
 
     function filterHistory() {
         const keywordInput = document.getElementById('searchInput').value.toLowerCase().trim();
         if (!keywordInput) return renderHistory(history);
-        
-        const normalizedKeyword = keywordInput.replace(/[./]/g, '-');
-        const keywords = normalizedKeyword.split(/\s+/).filter(k => k);
+        const keywords = keywordInput.replace(/[./]/g, '-').split(/\s+/).filter(k => k);
         const hasDateQuery = keywords.some(k => /\d/.test(k));
-
         if (hasDateQuery) {
-            const filteredHistory = history.filter(h => {
-                const hDateNormalized = h.date.replace(/[./]/g, '-').toLowerCase();
-                return keywords.some(k => hDateNormalized.includes(k));
-            });
-            renderHistory(filteredHistory, keywords);
+            renderHistory(history.filter(h => keywords.some(k => h.date.replace(/[./]/g, '-').toLowerCase().includes(k))), keywords);
         } else {
             renderHistory(history, keywords);
         }
@@ -1168,8 +1247,7 @@
     function exportToExcel(id) {
         const record = history.find(h => h.id === id);
         if (!record) return;
-        let csvContent = '\uFEFF';
-        csvContent += "순위,선수명,1게임,2게임,3게임,4게임,총점,에버리지,올커버횟수\n";
+        let csvContent = '\uFEFF' + "순위,선수명,1게임,2게임,3게임,4게임,총점,에버리지,올커버횟수\n";
         record.records.forEach((r, idx) => { 
             let cCount = r.coverCount !== undefined ? r.coverCount : ((r.c1?1:0)+(r.c2?1:0)+(r.c3?1:0)+(r.c4?1:0));
             csvContent += `${idx + 1}위,${r.name},${r.g1},${r.g2},${r.g3},${r.g4},${r.total},${r.avg},${cCount}회\n`; 
@@ -1182,14 +1260,11 @@
 
     function exportAllDB() {
         if (history.length === 0) return alert('백업할 데이터가 없습니다.');
-        let csvContent = '\uFEFF';
-        csvContent += "날짜,선수명,1게임,2게임,3게임,4게임,총점,에버리지,올커버횟수\n";
-        history.forEach(h => { 
-            h.records.forEach(r => { 
-                let cCount = r.coverCount !== undefined ? r.coverCount : ((r.c1?1:0)+(r.c2?1:0)+(r.c3?1:0)+(r.c4?1:0));
-                csvContent += `${h.date},${r.name},${r.g1},${r.g2},${r.g3},${r.g4},${r.total},${r.avg},${cCount}회\n`; 
-            }); 
-        });
+        let csvContent = '\uFEFF' + "날짜,선수명,1게임,2게임,3게임,4게임,총점,에버리지,올커버횟수\n";
+        history.forEach(h => { h.records.forEach(r => { 
+            let cCount = r.coverCount !== undefined ? r.coverCount : ((r.c1?1:0)+(r.c2?1:0)+(r.c3?1:0)+(r.c4?1:0));
+            csvContent += `${h.date},${r.name},${r.g1},${r.g2},${r.g3},${r.g4},${r.total},${r.avg},${cCount}회\n`; 
+        }); });
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob); link.download = `Connection_전체DB_백업_${new Date().toISOString().split('T')[0]}.csv`;
@@ -1200,32 +1275,22 @@
         const file = event.target.files[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = function(e) {
-            let text = e.target.result;
-            if (text.includes('')) {
-                const readerKor = new FileReader();
-                readerKor.onload = function(eKor) { processCSVText(eKor.target.result, event); };
-                readerKor.readAsText(file, 'euc-kr');
-            } else { processCSVText(text, event); }
-        };
+        reader.onload = function(e) { processCSVText(e.target.result, event); };
         reader.readAsText(file, 'utf-8');
     }
 
     function processCSVText(text, event) {
         const rows = text.split('\n').map(row => row.trim()).filter(row => row);
         if (rows.length < 2) { alert('데이터가 없거나 형식이 잘못되었습니다.'); event.target.value = ''; return; }
-
         let newHistoryMap = {};
         for (let i = 1; i < rows.length; i++) {
             const cols = rows[i].split(',');
             if (cols.length < 8) continue; 
             const date = cols[0].trim(); const name = cols[1].trim();
             if (!date || !name || date.includes('위')) continue;
-            
             if (!newHistoryMap[date]) newHistoryMap[date] = { id: Date.now() + Math.random(), date: date, records: [] };
             newHistoryMap[date].records.push({ name, g1: parseFloat(cols[2])||0, g2: parseFloat(cols[3])||0, g3: parseFloat(cols[4])||0, g4: parseFloat(cols[5])||0, total: parseFloat(cols[6])||0, avg: (parseFloat(cols[7])||0).toFixed(1), coverCount: 0 });
         }
-
         Object.keys(newHistoryMap).forEach(d => {
             newHistoryMap[d].records.sort((a, b) => b.total - a.total);
             const existingIndex = history.findIndex(h => h.date.startsWith(d.split(' ')[0]));
@@ -1233,20 +1298,15 @@
                 let combined = [...history[existingIndex].records];
                 newHistoryMap[d].records.forEach(nr => {
                     let idx = combined.findIndex(r => r.name === nr.name);
-                    if(idx !== -1) combined[idx] = nr;
-                    else combined.push(nr);
+                    if(idx !== -1) combined[idx] = nr; else combined.push(nr);
                 });
                 combined.sort((a, b) => b.total - a.total);
                 history[existingIndex].records = combined;
-            } else {
-                history.push(newHistoryMap[d]); 
-            }
+            } else { history.push(newHistoryMap[d]); }
         });
-
         history.sort((a, b) => b.date.localeCompare(a.date));
         syncHistoryToDB();
-        
-        alert('성공적으로 DB에 데이터를 병합(업로드)했습니다.');
+        alert('성공적으로 데이터를 병합했습니다.');
         event.target.value = '';
     }
 
@@ -1284,14 +1344,8 @@
 
     function populateStatPlayerSelect() {
         let allNamesSet = new Set();
-        players.forEach(p => {
-            if (!hiddenStatMembers[p.name]) allNamesSet.add(p.name);
-        });
-        history.forEach(h => { 
-            if(h && h.records) h.records.forEach(r => {
-                if (!hiddenStatMembers[r.name]) allNamesSet.add(r.name);
-            }); 
-        });
+        players.forEach(p => { if (!hiddenStatMembers[p.name]) allNamesSet.add(p.name); });
+        history.forEach(h => { if(h && h.records) h.records.forEach(r => { if (!hiddenStatMembers[r.name]) allNamesSet.add(r.name); }); });
         allPlayerNames = Array.from(allNamesSet).sort();
         filterStatPlayerDropdown();
     }
@@ -1300,24 +1354,13 @@
         const query = document.getElementById('statPlayerSearch').value.toLowerCase().trim();
         const select = document.getElementById('statPlayerSelect');
         const currentSelected = select.value;
-
         const filteredNames = allPlayerNames.filter(name => name.toLowerCase().includes(query));
-
         select.innerHTML = '';
         if (filteredNames.length === 0) {
             select.innerHTML = '<option value="">-- 검색 결과 없음 --</option>';
         } else {
-            filteredNames.forEach(name => {
-                let opt = document.createElement('option');
-                opt.value = name;
-                opt.text = name;
-                select.appendChild(opt);
-            });
-            if (filteredNames.includes(currentSelected)) {
-                select.value = currentSelected;
-            } else {
-                select.value = filteredNames[0];
-            }
+            filteredNames.forEach(name => select.appendChild(new Option(name, name)));
+            select.value = filteredNames.includes(currentSelected) ? currentSelected : filteredNames[0];
         }
         renderIndividualStats();
     }
@@ -1333,8 +1376,7 @@
         let totalSum = 0, totalCount = 0;
         const teamAvgs = chronoHistory.map(h => {
             if(!h.records || h.records.length === 0) return 0;
-            let hSum = 0;
-            let validCount = 0;
+            let hSum = 0, validCount = 0;
             h.records.forEach(r => { 
                 if (hiddenStatMembers[r.name]) return;
                 let a = parseFloat(r.avg); 
@@ -1346,12 +1388,14 @@
         document.getElementById('statOverallAvg').innerText = totalCount > 0 ? `${(totalSum / totalCount).toFixed(1)}점` : '0점';
 
         if(teamAvgChartInstance) teamAvgChartInstance.destroy();
-        const ctxTeam = document.getElementById('teamAvgChart').getContext('2d');
-        teamAvgChartInstance = new Chart(ctxTeam, { type: 'line', data: { labels: labels, datasets: [{ label: '팀 전체 평균 에버리지', data: teamAvgs, borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderWidth: 2, pointBackgroundColor: '#2563eb', fill: true, tension: 0.3 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false } } } });
+        teamAvgChartInstance = new Chart(document.getElementById('teamAvgChart').getContext('2d'), { 
+            type: 'line', 
+            data: { labels: labels, datasets: [{ label: '팀 전체 평균 에버리지', data: teamAvgs, borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.1)', borderWidth: 2, fill: true, tension: 0.3 }] }, 
+            options: { responsive: true, maintainAspectRatio: false } 
+        });
 
         const startMonth = document.getElementById('attendStartMonth').value;
         const endMonth = document.getElementById('attendEndMonth').value;
-
         const filteredHistoryForAttend = history.filter(h => {
             const mMatch = h.date.match(/^(\d{4}[-./]\d{2})/);
             if (!mMatch) return true;
@@ -1362,67 +1406,23 @@
         });
 
         let attendanceMap = {};
-        filteredHistoryForAttend.forEach(h => { 
-            if(h && h.records) h.records.forEach(r => { 
-                if (hiddenStatMembers[r.name]) return;
-                if(!attendanceMap[r.name]) attendanceMap[r.name] = 0; 
-                attendanceMap[r.name]++; 
-            }); 
-        });
+        filteredHistoryForAttend.forEach(h => { if(h && h.records) h.records.forEach(r => { if (!hiddenStatMembers[r.name]) { attendanceMap[r.name] = (attendanceMap[r.name] || 0) + 1; } }); });
 
         const showAll = document.getElementById('showAllAttendance').checked;
         const totalFilteredMeets = filteredHistoryForAttend.length;
+        let sortedAttend = Object.keys(attendanceMap).map(name => ({ name, count: attendanceMap[name], rate: totalFilteredMeets > 0 ? (attendanceMap[name] / totalFilteredMeets * 100).toFixed(0) : 0 })).sort((a, b) => b.count - a.count);
 
-        let sortedAttend = Object.keys(attendanceMap).map(name => ({ 
-            name: name, 
-            count: attendanceMap[name], 
-            rate: totalFilteredMeets > 0 ? (attendanceMap[name] / totalFilteredMeets * 100).toFixed(0) : 0 
-        })).sort((a, b) => b.count - a.count);
+        document.getElementById('attendanceChartTitle').innerText = showAll ? `🏆 멤버별 누적 출석률 (전체 순위)` : `🏆 멤버별 누적 출석률 (Top 10)`;
+        if (!showAll) sortedAttend = sortedAttend.slice(0, 10);
 
-        const chartTitleElem = document.getElementById('attendanceChartTitle');
         const chartWrapperElem = document.getElementById('attendanceChartWrapper');
-
-        if (!showAll) {
-            chartTitleElem.innerText = `🏆 멤버별 누적 출석률 (Top 10)`;
-            sortedAttend = sortedAttend.slice(0, 10);
-        } else {
-            chartTitleElem.innerText = `🏆 멤버별 누적 출석률 (전체 순위)`;
-        }
-
-        const chartCanvasElem = document.getElementById('attendanceChart');
-        if (showAll && sortedAttend.length > 10) {
-            chartWrapperElem.style.height = `${Math.max(300, sortedAttend.length * 35)}px`;
-        } else {
-            chartWrapperElem.style.height = `300px`;
-        }
+        chartWrapperElem.style.height = (showAll && sortedAttend.length > 10) ? `${Math.max(300, sortedAttend.length * 35)}px` : `300px`;
 
         if(attendanceChartInstance) attendanceChartInstance.destroy();
-        const ctxAttend = chartCanvasElem.getContext('2d');
-        attendanceChartInstance = new Chart(ctxAttend, { 
+        attendanceChartInstance = new Chart(document.getElementById('attendanceChart').getContext('2d'), { 
             type: 'bar', 
-            data: { 
-                labels: sortedAttend.map(a => a.name), 
-                datasets: [{ label: '출석 횟수', data: sortedAttend.map(a => a.count), backgroundColor: '#16a34a', borderRadius: 4 }] 
-            }, 
-            options: { 
-                responsive: true, 
-                maintainAspectRatio: false, 
-                indexAxis: showAll && sortedAttend.length > 10 ? 'y' : 'x',
-                plugins: { 
-                    tooltip: { 
-                        callbacks: { 
-                            label: function(context) { 
-                                let item = sortedAttend[context.dataIndex]; 
-                                return `출석: ${item.count}회 (${item.rate}%)`; 
-                            } 
-                        } 
-                    } 
-                }, 
-                scales: { 
-                    x: { beginAtZero: true, ticks: { stepSize: 1 } },
-                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
-                } 
-            } 
+            data: { labels: sortedAttend.map(a => a.name), datasets: [{ label: '출석 횟수', data: sortedAttend.map(a => a.count), backgroundColor: '#16a34a', borderRadius: 4 }] }, 
+            options: { responsive: true, maintainAspectRatio: false, indexAxis: showAll && sortedAttend.length > 10 ? 'y' : 'x', scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } }, y: { beginAtZero: true, ticks: { stepSize: 1 } } } } 
         });
     }
 
@@ -1430,8 +1430,7 @@
         const playerName = document.getElementById('statPlayerSelect').value;
         const startMonth = document.getElementById('indivStartMonth').value;
         const endMonth = document.getElementById('indivEndMonth').value;
-        const totalMeets = history.length;
-        if(!playerName || totalMeets === 0 || hiddenStatMembers[playerName]) { 
+        if(!playerName || history.length === 0 || hiddenStatMembers[playerName]) { 
             document.getElementById('indivStatContent').style.display = 'none'; 
             document.getElementById('emptyIndivStats').style.display = 'block'; 
             return; 
@@ -1459,35 +1458,25 @@
                 attendCount++; 
                 let a = parseFloat(record.avg); 
                 if(a > 0) { sumAvg += a; validGames++; }
-                
-                [record.g1, record.g2, record.g3, record.g4].forEach(g => {
-                    if (g > highGame) highGame = g;
-                });
-
-                if (record.coverCount !== undefined) {
-                    totalCovers += record.coverCount;
-                } else {
-                    if (record.c1) totalCovers++;
-                    if (record.c2) totalCovers++;
-                    if (record.c3) totalCovers++;
-                    if (record.c4) totalCovers++;
-                }
-
+                [record.g1, record.g2, record.g3, record.g4].forEach(g => { if (g > highGame) highGame = g; });
+                totalCovers += (record.coverCount !== undefined ? record.coverCount : ((record.c1?1:0)+(record.c2?1:0)+(record.c3?1:0)+(record.c4?1:0)));
                 return a; 
             }
             return null; 
         });
 
-        const attendRate = periodTotalMeets > 0 ? ((attendCount / periodTotalMeets) * 100).toFixed(1) : '0.0';
-        document.getElementById('indivAttendRate').innerText = `${attendRate}%`;
+        document.getElementById('indivAttendRate').innerText = `${periodTotalMeets > 0 ? ((attendCount / periodTotalMeets) * 100).toFixed(1) : '0.0'}%`;
         document.getElementById('indivAttendCount').innerText = `출석 ${attendCount}회 / 전체 ${periodTotalMeets}회`;
         document.getElementById('indivOverallAvg').innerText = validGames > 0 ? `${(sumAvg / validGames).toFixed(1)}점` : '0점';
         document.getElementById('indivHighGame').innerText = `${highGame}점`;
         document.getElementById('indivCoverCount').innerText = `${totalCovers}회`;
 
         if(indivAvgChartInstance) indivAvgChartInstance.destroy();
-        const ctxIndiv = document.getElementById('indivAvgChart').getContext('2d');
-        indivAvgChartInstance = new Chart(ctxIndiv, { type: 'line', data: { labels: labels, datasets: [{ label: `${playerName} 에버리지`, data: indivAvgs, borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', borderWidth: 2, pointBackgroundColor: '#f59e0b', pointRadius: 4, fill: true, spanGaps: true }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false } } } });
+        indivAvgChartInstance = new Chart(document.getElementById('indivAvgChart').getContext('2d'), { 
+            type: 'line', 
+            data: { labels: labels, datasets: [{ label: `${playerName} 에버리지`, data: indivAvgs, borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', borderWidth: 2, fill: true, spanGaps: true }] }, 
+            options: { responsive: true, maintainAspectRatio: false } 
+        });
 
         renderClubStatsTable();
     }
@@ -1495,7 +1484,6 @@
     function getClubStatsArrayData() {
         const startMonth = document.getElementById('clubStatStartMonth').value;
         const endMonth = document.getElementById('clubStatEndMonth').value;
-
         const filteredHistory = history.filter(h => {
             const mMatch = h.date.match(/^(\d{4}[-./]\d{2})/);
             if (!mMatch) return true;
@@ -1506,21 +1494,14 @@
         });
 
         let statsMap = {};
-
         filteredHistory.forEach(h => {
             if (!h || !h.records) return;
             h.records.forEach(r => {
                 const name = r.name;
                 if (hiddenStatMembers[name]) return;
-
-                if (!statsMap[name]) {
-                    statsMap[name] = { name: name, totalAvgSum: 0, avgCount: 0, high: 0, low: 999, totalGames: 0 };
-                }
+                if (!statsMap[name]) statsMap[name] = { name: name, totalAvgSum: 0, avgCount: 0, high: 0, low: 999, totalGames: 0 };
                 const avgVal = parseFloat(r.avg);
-                if (!isNaN(avgVal) && avgVal > 0) {
-                    statsMap[name].totalAvgSum += avgVal;
-                    statsMap[name].avgCount++;
-                }
+                if (!isNaN(avgVal) && avgVal > 0) { statsMap[name].totalAvgSum += avgVal; statsMap[name].avgCount++; }
                 [r.g1, r.g2, r.g3, r.g4].forEach(g => {
                     let score = parseFloat(g);
                     if (!isNaN(score) && score > 0) {
@@ -1532,64 +1513,37 @@
             });
         });
 
-        let clubStatsArray = Object.values(statsMap).map(item => {
-            let overallAvg = item.avgCount > 0 ? (item.totalAvgSum / item.avgCount).toFixed(1) : 0;
-            let lowScore = item.low === 999 ? 0 : item.low;
-            let diff = (item.high > 0 && lowScore > 0) ? (item.high - lowScore) : 0;
-            return {
-                name: item.name,
-                avg: parseFloat(overallAvg),
-                high: item.high,
-                low: lowScore,
-                diff: diff,
-                games: item.totalGames
-            };
-        });
+        let clubStatsArray = Object.values(statsMap).map(item => ({
+            name: item.name,
+            avg: parseFloat(item.avgCount > 0 ? (item.totalAvgSum / item.avgCount).toFixed(1) : 0),
+            high: item.high,
+            low: item.low === 999 ? 0 : item.low,
+            diff: (item.high > 0 && item.low !== 999) ? (item.high - item.low) : 0,
+            games: item.totalGames
+        }));
 
         clubStatsArray.sort((a, b) => {
-            let valA = a[currentSortColumn];
-            let valB = b[currentSortColumn];
-            if (typeof valA === 'string') {
-                return currentSortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-            }
-            return currentSortDirection === 'asc' ? valA - valB : valB - valA;
+            let valA = a[currentSortColumn], valB = b[currentSortColumn];
+            return typeof valA === 'string' ? (currentSortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA)) : (currentSortDirection === 'asc' ? valA - valB : valB - valA);
         });
 
         return { clubStatsArray, startMonth, endMonth };
     }
 
     function sortClubStats(column) {
-        if (currentSortColumn === column) {
-            currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
-        } else {
-            currentSortColumn = column;
-            currentSortDirection = column === 'name' ? 'asc' : 'desc';
-        }
-        updateSortIcons();
-        renderClubStatsTable();
-    }
-
-    function updateSortIcons() {
+        if (currentSortColumn === column) currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+        else { currentSortColumn = column; currentSortDirection = column === 'name' ? 'asc' : 'desc'; }
         ['rank', 'name', 'avg', 'high', 'low', 'diff', 'games'].forEach(col => {
             const span = document.getElementById(`sort_${col}`);
-            if (span) {
-                if (currentSortColumn === col) {
-                    span.innerText = currentSortDirection === 'asc' ? ' ▲' : ' ▼';
-                } else {
-                    span.innerText = '';
-                }
-            }
+            if (span) span.innerText = currentSortColumn === col ? (currentSortDirection === 'asc' ? ' ▲' : ' ▼') : '';
         });
+        renderClubStatsTable();
     }
 
     function renderClubStatsTable() {
         const { clubStatsArray } = getClubStatsArrayData();
         const tbody = document.getElementById('clubStatsTableBody');
-        if (clubStatsArray.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" style="padding: 30px; color: #94a3b8;">조건에 해당하는 회원 기록이 없습니다.</td></tr>`;
-            return;
-        }
-
+        if (clubStatsArray.length === 0) return tbody.innerHTML = `<tr><td colspan="7" style="padding: 30px; color: #94a3b8;">조건에 해당하는 회원 기록이 없습니다.</td></tr>`;
         tbody.innerHTML = clubStatsArray.map((item, idx) => `
             <tr>
                 <td><strong>${idx + 1}위</strong></td>
@@ -1608,45 +1562,25 @@
         players.forEach(p => allNamesSet.add(p.name));
         history.forEach(h => { if(h && h.records) h.records.forEach(r => allNamesSet.add(r.name)); });
         const uniqueNames = Array.from(allNamesSet).sort();
+        if (uniqueNames.length === 0) return alert('등록된 회원이 없습니다.');
 
-        if (uniqueNames.length === 0) {
-            alert('등록되거나 기록된 회원이 없습니다.');
-            return;
-        }
-
-        const container = document.getElementById('modalMemberListContainer');
-        container.innerHTML = uniqueNames.map(name => {
-            const isChecked = !hiddenStatMembers[name]; 
-            return `
-                <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: white; border-radius: 6px; margin-bottom: 6px; border: 1px solid var(--border-color);">
-                    <label style="cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%;">
-                        <input type="checkbox" class="member-filter-chk" data-name="${name}" ${isChecked ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
-                        <strong>${name}</strong>
-                    </label>
-                </div>
-            `;
-        }).join('');
-
+        document.getElementById('modalMemberListContainer').innerHTML = uniqueNames.map(name => `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: white; border-radius: 6px; margin-bottom: 6px; border: 1px solid var(--border-color);">
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%;">
+                    <input type="checkbox" class="member-filter-chk" data-name="${name}" ${!hiddenStatMembers[name] ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                    <strong>${name}</strong>
+                </label>
+            </div>
+        `).join('');
         document.getElementById('memberFilterModal').style.display = 'flex';
     }
 
-    function closeMemberFilterModal() {
-        document.getElementById('memberFilterModal').style.display = 'none';
-    }
-
-    function toggleAllMemberFilter(status) {
-        document.querySelectorAll('.member-filter-chk').forEach(chk => chk.checked = status);
-    }
+    function closeMemberFilterModal() { document.getElementById('memberFilterModal').style.display = 'none'; }
+    function toggleAllMemberFilter(status) { document.querySelectorAll('.member-filter-chk').forEach(chk => chk.checked = status); }
 
     function saveMemberFilterSettings() {
         let newHiddenMap = {};
-        document.querySelectorAll('.member-filter-chk').forEach(chk => {
-            const name = chk.getAttribute('data-name');
-            if (!chk.checked) {
-                newHiddenMap[name] = true; 
-            }
-        });
-
+        document.querySelectorAll('.member-filter-chk').forEach(chk => { if (!chk.checked) newHiddenMap[chk.getAttribute('data-name')] = true; });
         db.ref('bowling_hiddenStatMembers').set(newHiddenMap).then(() => {
             hiddenStatMembers = newHiddenMap;
             closeMemberFilterModal();
@@ -1655,20 +1589,12 @@
         });
     }
 
-    // [업그레이드된 클럽원 순위 카카오톡 공유 함수]
     function shareClubStatsKakao() {
         const { clubStatsArray, startMonth, endMonth } = getClubStatsArrayData();
-        if (clubStatsArray.length === 0) return alert('공유할 통계 데이터가 없습니다.');
-
+        if (clubStatsArray.length === 0) return alert('공유할 데이터가 없습니다.');
         let periodStr = (startMonth && endMonth) ? `[조회 기간: ${startMonth} ~ ${endMonth}]` : `[전체 기간 누적 통계]`;
-        
-        // 상위 5명 상세 리스트 만들기
-        let topTextList = clubStatsArray.slice(0, 5).map((item, idx) => {
-            let medal = idx === 0 ? '🥇' : (idx === 1 ? '🥈' : (idx === 2 ? '🥉' : `${idx + 1}위`));
-            return `${medal} ${item.name} : ${item.avg.toFixed(1)}점 (High: ${item.high}점 / ${item.games}게임)`;
-        }).join('\n');
-
-        let richDescription = `${periodStr}\n\n[클럽 랭킹 TOP 5]\n${topTextList}\n\n✨ 실시간 점수 및 전체 순위를 확인해보세요!`;
+        let topTextList = clubStatsArray.slice(0, 5).map((item, idx) => `${idx === 0 ? '🥇' : (idx === 1 ? '🥈' : (idx === 2 ? '🥉' : `${idx + 1}위`))} ${item.name} : ${item.avg.toFixed(1)}점 (${item.games}게임)`).join('\n');
+        let richDescription = `${periodStr}\n\n[클럽 랭킹 TOP 5]\n${topTextList}\n\n✨ 실시간 전체 순위를 확인해보세요!`;
 
         if (window.Kakao && Kakao.isInitialized()) {
             Kakao.Share.sendDefault({
@@ -1682,37 +1608,15 @@
                 buttons: [{ title: '시스템에서 전체 순위 보기', link: { mobileWebUrl: window.location.href, webUrl: window.location.href } }],
             });
         } else {
-            let text = `🎳 [Bowling Connection 클럽원 순위 통계]\n${richDescription}\n---------------------------\n💡 Connection 볼링 클럽 관리 시스템`;
-            copyTextAndAlert(text, "카카오 SDK 로드 실패로 클립보드 복사 방식으로 전환되었습니다.\n카카오톡 채팅창에 붙여넣기(Ctrl+V) 하세요.");
+            copyTextAndAlert(`🎳 [Bowling Connection 클럽원 순위 통계]\n${richDescription}`, "클립보드에 복사되었습니다.");
         }
     }
 
-    // [업그레이드된 정모 상세 기록 카카오톡 공유 함수]
     function shareHistoryKakao(id) {
         const record = history.find(h => h.id === id);
         if (!record) return;
-
-        // 메달별 상위권 요약
-        let podiumText = record.records.slice(0, 3).map((r, i) => {
-            let medal = i === 0 ? '🥇 금메달' : (i === 1 ? '🥈 은메달' : '🥉 동메달');
-            return `${medal}: ${r.name} (${r.total}점 / 평균 ${r.avg})`;
-        }).join('\n');
-
-        // 올커버 달성자 찾기
-        let coverMakers = [];
-        record.records.forEach(r => {
-            let covers = [];
-            if(r.c1) covers.push('1');
-            if(r.c2) covers.push('2');
-            if(r.c3) covers.push('3');
-            if(r.c4) covers.push('4');
-            if(covers.length > 0) {
-                coverMakers.push(`${r.name}(${covers.join(',')}G)`);
-            }
-        });
-        let coverText = coverMakers.length > 0 ? `\n🌟 올커버 달성: ${coverMakers.join(', ')}` : '';
-
-        let richDescription = `📅 정모 일자: ${record.date}\n👥 참석 인원: ${record.records.length}명\n\n[🏆 시상대 (TOP 3)]\n${podiumText}${coverText}\n\n🔥 상세 스코어와 전체 순위를 확인하세요!`;
+        let podiumText = record.records.slice(0, 3).map((r, i) => `${i === 0 ? '🥇 금메달' : (i === 1 ? '🥈 은메달' : '🥉 동메달')}: ${r.name} (${r.total}점 / 평균 ${r.avg})`).join('\n');
+        let richDescription = `📅 정모 일자: ${record.date}\n👥 참석 인원: ${record.records.length}명\n\n[🏆 시상대 (TOP 3)]\n${podiumText}\n\n🔥 상세 스코어를 확인하세요!`;
 
         if (window.Kakao && Kakao.isInitialized()) {
             Kakao.Share.sendDefault({
@@ -1726,53 +1630,30 @@
                 buttons: [{ title: '상세 점수표 확인하기', link: { mobileWebUrl: window.location.href, webUrl: window.location.href } }],
             });
         } else {
-            let text = `🎳 [Bowling Connection 정모 상세 기록]\n${richDescription}\n---------------------------\n💡 Connection 볼링 클럽 관리 시스템`;
-            copyTextAndAlert(text, "카카오 SDK 로드 실패로 클립보드 복사 방식으로 전환되었습니다.\n카카오톡 채팅창에 붙여넣기(Ctrl+V) 하세요.");
+            copyTextAndAlert(`🎳 [정모 상세 기록]\n${richDescription}`, "클립보드에 복사되었습니다.");
         }
     }
 
     function copyTextAndAlert(text, alertMsg) {
         if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(() => { alert(alertMsg); }).catch(() => { fallbackCopyText(text, alertMsg); });
+            navigator.clipboard.writeText(text).then(() => alert(alertMsg));
         } else {
-            fallbackCopyText(text, alertMsg);
-        }
-    }
-
-    function fallbackCopyText(text, alertMsg) {
-        const textarea = document.createElement("textarea");
-        textarea.value = text;
-        textarea.style.position = "fixed";  
-        document.body.appendChild(textarea);
-        textarea.focus();
-        textarea.select();
-        try {
-            const successful = document.execCommand('copy');
-            if (successful) alert(alertMsg);
-            else alert("복사에 실패했습니다. 직접 복사해주세요.");
-        } catch (err) {
             alert("복사 기능을 지원하지 않는 브라우저입니다.");
         }
-        document.body.removeChild(textarea);
     }
 
     function exportClubStatsExcel() {
         const { clubStatsArray } = getClubStatsArrayData();
-        if (clubStatsArray.length === 0) return alert('다운로드할 통계 데이터가 없습니다.');
-
-        let csvContent = '\uFEFF';
-        csvContent += "순위,회원명,누적에버리지,최고점(High),최저점(Low),편차(Low-High),총게임수\n";
+        if (clubStatsArray.length === 0) return alert('다운로드할 데이터가 없습니다.');
+        let csvContent = '\uFEFF' + "순위,회원명,누적에버리지,최고점(High),최저점(Low),편차,총게임수\n";
         clubStatsArray.sort((a, b) => b.avg - a.avg).forEach((item, idx) => {
             csvContent += `${idx + 1}위,${item.name},${item.avg.toFixed(1)},${item.high},${item.low},${item.diff},${item.games}게임\n`;
         });
-
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob);
         link.download = `Connection_클럽원통계순위_${new Date().toISOString().split('T')[0]}.csv`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
     }
 </script>
 
