@@ -92,7 +92,7 @@
         .team-mode-bar label { cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px; color: #1e293b; }
         .game-selector-bar { display: flex; align-items: center; gap: 12px; background: #f1f5f9; padding: 12px 16px; border-radius: 8px; margin-bottom: 15px; flex-wrap: wrap; }
         .game-selector-bar.history-mode { background: #e0f2fe; }
-        .search-bar { width: 100%; max-width: 300px; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; }
+        .search-bar { width: 100%; max-width: 240px; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; }
         .chart-container { position: relative; height: 300px; width: 100%; margin-top: 20px; }
         .stat-summary-box { display: flex; gap: 15px; background: #f1f5f9; padding: 15px; border-radius: 8px; margin-top: 15px; margin-bottom: 25px; justify-content: space-around; flex-wrap: wrap;}
         .stat-item { text-align: center; min-width: 110px; }
@@ -350,7 +350,12 @@
         <div class="card">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
                 <h3 style="margin: 0;">📅 역대 정모 상세 기록</h3>
-                <input type="text" id="searchInput" class="search-bar" placeholder="🔍 날짜 또는 이름(다중 검색 가능) 검색" oninput="filterHistory()">
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <select id="historyFilterMonthSelect" onchange="filterHistory()" style="padding: 8px 12px; font-weight: 600; color: var(--primary-color);">
+                        <option value="all">📅 전체 월별 보기</option>
+                    </select>
+                    <input type="text" id="searchInput" class="search-bar" placeholder="🔍 이름 검색" oninput="filterHistory()">
+                </div>
             </div>
             <div id="historyContainer" style="margin-top: 15px;"></div>
             <div id="loadMoreContainer" style="text-align: center; margin-top: 20px; display: none;">
@@ -486,6 +491,7 @@
                 history = Object.values(rawData).filter(h => h && h.date && Array.isArray(h.records));
             }
             populateTargetMonthSelect();
+            populateHistoryMonthDropdown();
             populateAttendanceMonthSelects();
             populateIndivMonthSelects();
             populateClubStatMonthSelects();
@@ -692,6 +698,19 @@
         Kakao.Share.sendDefault({ objectType: 'text', text: summaryText.trim(), link: { mobileWebUrl: window.location.href, webUrl: window.location.href } });
     }
 
+    // 개별 역대 기록 상세 카카오톡 공유
+    function shareHistoryRecordToKakao(id) {
+        const recordObj = history.find(h => h.id === id);
+        if (!recordObj) return;
+
+        let text = `🎳 [Bowling Connection 정모 결과]\n📅 날짜: ${recordObj.date}\n\n`;
+        recordObj.records.forEach((r, idx) => {
+            text += `${idx + 1}위 ${r.name} | 총점: ${r.total}점 (에버: ${r.avg})\n`;
+        });
+
+        Kakao.Share.sendDefault({ objectType: 'text', text: text.trim(), link: { mobileWebUrl: window.location.href, webUrl: window.location.href } });
+    }
+
     // 클럽 전체 순위 및 기록표 카카오톡 공유
     function shareClubStatsToKakao() {
         const { clubStatsArray, startMonth, endMonth } = getClubStatsArrayData();
@@ -700,14 +719,13 @@
         let periodStr = (startMonth && endMonth) ? `(${startMonth} ~ ${endMonth})` : '(전체 기간)';
         let text = `🎳 [Bowling Connection 클럽 전체 순위]\n📅 조회 기간: ${periodStr}\n\n`;
         
-        // 상위 10명까지만 깔끔하게 요약해서 카카오톡 전송
         const topList = clubStatsArray.slice(0, 10);
         topList.forEach((item, idx) => {
             text += `${idx + 1}위 ${item.name} | 에버: ${item.avg.toFixed(1)}점 (High: ${item.high}, Low: ${item.low})\n`;
         });
 
         if (clubStatsArray.length > 10) {
-            text += `\n... 외 ${clubStatsArray.length - 10}명 (시스템에서 전체 확인)`;
+            text += `\n... 외 ${clubStatsArray.length - 10}명`;
         }
 
         Kakao.Share.sendDefault({ objectType: 'text', text: text.trim(), link: { mobileWebUrl: window.location.href, webUrl: window.location.href } });
@@ -814,6 +832,16 @@
         const months = new Set();
         history.forEach(h => { const m = h.date.match(/^(\d{4}[-./]\d{2})/); if(m) months.add(m[1].replace(/[-/]/g, '-')); });
         Array.from(months).sort((a,b)=>b.localeCompare(a)).forEach(m => select.appendChild(new Option(m + '월 정모 기준', m)));
+        select.value = currentVal;
+    }
+
+    function populateHistoryMonthDropdown() {
+        const select = document.getElementById('historyFilterMonthSelect');
+        const currentVal = select.value || 'all';
+        select.innerHTML = '<option value="all">📅 전체 월별 보기</option>';
+        const months = new Set();
+        history.forEach(h => { const m = h.date.match(/^(\d{4}[-./]\d{2})/); if(m) months.add(m[1].replace(/[-/]/g, '-')); });
+        Array.from(months).sort((a,b)=>b.localeCompare(a)).forEach(m => select.appendChild(new Option(m + '월 기록 보기', m)));
         select.value = currentVal;
     }
 
@@ -1097,26 +1125,24 @@
         });
     }
 
-    function renderHistory(dataToRender = history, searchKeywords = []) {
+    function renderHistory(dataToRender = history) {
         const container = document.getElementById('historyContainer');
         const loadMoreContainer = document.getElementById('loadMoreContainer');
         if (!dataToRender || dataToRender.length === 0) { loadMoreContainer.style.display = 'none'; return container.innerHTML = `<div class="empty-stats">검색된 기록이 없습니다.</div>`; }
         
-        const isSearching = searchKeywords.length > 0;
-        loadMoreContainer.style.display = (!isSearching && dataToRender.length > visibleHistoryCount) ? 'block' : 'none';
+        const selectedMonth = document.getElementById('historyFilterMonthSelect').value;
+        const keywordInput = document.getElementById('searchInput').value.toLowerCase().trim();
+        const isFiltering = (selectedMonth !== 'all' || keywordInput !== '');
 
-        container.innerHTML = (isSearching ? dataToRender : dataToRender.slice(0, visibleHistoryCount)).map(h => {
-            let displayRecords = h.records;
-            if (searchKeywords.length > 0) {
-                const nameKeywords = searchKeywords.filter(k => !/\d/.test(k));
-                if (nameKeywords.length > 0) displayRecords = h.records.filter(r => nameKeywords.some(nk => r.name.toLowerCase().includes(nk)));
-                if (displayRecords.length === 0) return '';
-            }
+        loadMoreContainer.style.display = (!isFiltering && dataToRender.length > visibleHistoryCount) ? 'block' : 'none';
+
+        container.innerHTML = (isFiltering ? dataToRender : dataToRender.slice(0, visibleHistoryCount)).map(h => {
             return `
             <div class="history-box">
                 <div style="display: flex; justify-content: space-between; border-bottom: 2px solid var(--primary-color); padding-bottom: 6px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; gap: 8px;">
                     <strong style="font-size: 16px; color: var(--primary-color);">📅 ${h.date}</strong>
                     <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                        <button class="kakao-share" onclick="shareHistoryRecordToKakao(${h.id})" style="padding: 4px 8px; font-size: 12px;">💬 공유</button>
                         <button class="success" onclick="exportToExcel(${h.id})" style="padding: 4px 8px; font-size: 12px;">📥 엑셀</button>
                         <button class="delete-btn" onclick="checkPasswordAndExecute(() => deleteHistory(${h.id}))" style="padding: 4px 8px; font-size: 12px;">삭제</button>
                     </div>
@@ -1124,7 +1150,7 @@
                 <div style="overflow-x: auto;">
                     <table class="score-table" style="background: white;">
                         <thead><tr><th>순위</th><th>선수명</th><th>1G</th><th>2G</th><th>3G</th><th>4G</th><th>총점</th><th>평균</th><th>올커버</th></tr></thead>
-                        <tbody>${displayRecords.map((r, i) => {
+                        <tbody>${h.records.map((r, i) => {
                             let covers = [];
                             if(r.c1) covers.push('1G'); if(r.c2) covers.push('2G'); if(r.c3) covers.push('3G'); if(r.c4) covers.push('4G');
                             return `<tr><td>${i+1}위</td><td>${r.name}</td><td>${r.g1}</td><td>${r.g2}</td><td>${r.g3}</td><td>${r.g4}</td><td><strong>${r.total}</strong></td><td>${r.avg}</td><td>${covers.length > 0 ? `<span class="cover-badge">🌟 ${covers.join(', ')}</span>` : '-'}</td></tr>`;
@@ -1138,10 +1164,20 @@
     function loadMoreHistory() { visibleHistoryCount += 5; renderHistory(); }
 
     function filterHistory() {
+        const selectedMonth = document.getElementById('historyFilterMonthSelect').value;
         const keywordInput = document.getElementById('searchInput').value.toLowerCase().trim();
-        if (!keywordInput) return renderHistory(history);
-        const keywords = keywordInput.replace(/[./]/g, '-').split(/\s+/).filter(k => k);
-        renderHistory(history.filter(h => keywords.some(k => h.date.replace(/[./]/g, '-').toLowerCase().includes(k) || h.records.some(r => r.name.toLowerCase().includes(k)))), keywords);
+        const nameKeywords = keywordInput.replace(/[./]/g, '-').split(/\s+/).filter(k => k);
+
+        let filtered = history.filter(h => {
+            const hDateClean = h.date.replace(/[-/]/g, '-');
+            const matchMonth = (selectedMonth === 'all' || hDateClean.startsWith(selectedMonth));
+            if (!matchMonth) return false;
+
+            if (nameKeywords.length === 0) return true;
+            return nameKeywords.some(nk => h.date.toLowerCase().includes(nk) || h.records.some(r => r.name.toLowerCase().includes(nk)));
+        });
+
+        renderHistory(filtered);
     }
 
     function exportToExcel(id) {
@@ -1180,7 +1216,7 @@
         if (mode === 'team') renderTeamStats(); else renderIndividualStats();
     }
 
-    function updateStatistics() { populateStatPlayerSelect(); populateAttendanceMonthSelects(); populateIndivMonthSelects(); populateClubStatMonthSelects(); toggleStatMode(); }
+    function updateStatistics() { populateStatPlayerSelect(); populateAttendanceMonthSelects(); populateIndivMonthSelects(); populateClubStatMonthSelects(); populateHistoryMonthDropdown(); toggleStatMode(); }
 
     function populateStatPlayerSelect() {
         let set = new Set();
