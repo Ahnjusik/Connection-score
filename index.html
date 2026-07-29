@@ -118,7 +118,7 @@
         <div class="auth-card" id="loginCardView">
             <h2>🎳 Connection</h2>
             <p>클럽 회원 전용 시스템입니다.<br>카카오 계정으로 안전하게 로그인해 주세요.</p>
-            <button class="kakao-btn" onclick="loginWithKakao()">
+            <button class="kakao-btn" onclick="loginWithKakaoPopup()">
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M9 1C4.58172 1 1 3.79086 1 7.21543C1 9.42055 2.45492 11.352 4.67389 12.4571L3.79159 15.7287C3.69992 16.068 4.08588 16.3263 4.37257 16.1264L8.47225 13.3328C8.64718 13.3444 8.82315 13.3503 10 13.3503C14.4183 13.3503 18 10.5594 18 7.13486C18 3.71029 14.4183 1 10 1Z" fill="#191919"/></svg>
                 카카오로 로그인 / 회원가입
             </button>
@@ -441,21 +441,39 @@
     let attendanceChartInstance = null;
     let indivAvgChartInstance = null;
 
-    function loginWithKakao() {
-        const currentUri = window.location.origin + window.location.pathname;
-        Kakao.Auth.authorize({
-            redirectUri: currentUri
+    // 카카오 팝업 로그인 방식 (리다이렉트 없이 즉시 처리하여 튕김 방지)
+    function loginWithKakaoPopup() {
+        Kakao.Auth.login({
+            success: async function(authObj) {
+                try {
+                    let res = await Kakao.API.request({ url: '/v2/user/me' });
+                    const kakaoId = String(res.id);
+                    const nickname = res.properties && res.properties.nickname ? res.properties.nickname : '볼러';
+
+                    localStorage.setItem('connection_kakao_id', kakaoId);
+                    localStorage.setItem('connection_kakao_nickname', nickname);
+                    currentKakaoUser = { id: kakaoId, name: nickname };
+
+                    if (!isAdmin && !approvedKakaoIds[kakaoId] && kakaoId !== 'admin_master') {
+                        await db.ref('bowling_pendingApprovals/' + kakaoId).set({
+                            name: nickname,
+                            requestedAt: new Date().toLocaleString()
+                        });
+                    }
+                    checkAuthAndRender();
+                } catch (err) {
+                    console.error("카카오 회원정보 요청 실패:", err);
+                    alert("회원 정보를 가져오지 못했습니다.");
+                }
+            },
+            fail: function(err) {
+                console.error("카카오 로그인 실패:", err);
+                alert("카카오 로그인에 실패했습니다.");
+            }
         });
     }
 
     window.onload = async function() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const code = urlParams.get('code');
-
-        if (code) {
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
-
         const savedId = localStorage.getItem('connection_kakao_id');
         const savedNick = localStorage.getItem('connection_kakao_nickname');
 
@@ -540,7 +558,8 @@
             }
         });
 
-        if (Kakao.Auth.getAccessToken() || code) {
+        // 이미 카카오 액세스 토큰이 세션에 남아있는 경우 자동 인증 연동
+        if (Kakao.Auth.getAccessToken()) {
             try {
                 let res = await Kakao.API.request({ url: '/v2/user/me' });
                 const kakaoId = String(res.id);
@@ -558,7 +577,7 @@
                 }
                 checkAuthAndRender();
             } catch (err) {
-                console.error("사용자 정보 요청 실패:", err);
+                console.error("자동 로그인 세션 복구 실패:", err);
             }
         }
     };
