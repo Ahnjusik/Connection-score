@@ -182,7 +182,7 @@
             </div>
 
             <div class="list-header">
-                <span>참석 회원 체크 및 에버리지 확인 (퇴출 처리 가능)</span>
+                <span>참석 회원 체크 및 에버리지 확인 (삭제 처리 가능)</span>
                 <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
                     <button type="button" id="expandListBtn" onclick="toggleExpandPlayerList()" style="padding: 4px 8px; font-size: 12px; background: #0284c7;">📖 전체 펼치기</button>
                     <button type="button" onclick="toggleAll(true)" style="padding: 4px 8px; font-size: 12px; background: #64748b;">전체 선택</button>
@@ -403,7 +403,6 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // 💡 사용자의 실제 JavaScript 키 반영 완료
     Kakao.init('12ba06b035aec27dddf5674111077d4d');
 
     let players = [];
@@ -413,7 +412,6 @@
     let hiddenStatMembers = {}; 
     let pendingApprovals = {};
     let approvedKakaoIds = {};
-    let blockedKakaoIds = {};
     let adminPassword = "1950";  
     let isAdmin = false;
     let currentKakaoUser = null;
@@ -455,14 +453,6 @@
         db.ref('bowling_approvedKakaoIds').on('value', (snapshot) => {
             approvedKakaoIds = snapshot.val() || {};
             checkAuthAndRender();
-        });
-
-        db.ref('bowling_blockedKakaoIds').on('value', (snapshot) => {
-            blockedKakaoIds = snapshot.val() || {};
-            if (savedId && blockedKakaoIds[savedId]) {
-                alert('관리자에 의해 차단(퇴출)된 계정입니다.');
-                logoutKakaoSession();
-            }
         });
 
         db.ref('bowling_pendingApprovals').on('value', (snapshot) => {
@@ -540,12 +530,6 @@
                 let res = await Kakao.API.request({ url: '/v2/user/me' });
                 const kakaoId = String(res.id);
                 const nickname = res.properties && res.properties.nickname ? res.properties.nickname : '볼러';
-
-                if (blockedKakaoIds[kakaoId]) {
-                    alert('관리자에 의해 차단(퇴출)된 계정입니다.');
-                    logoutKakaoSession();
-                    return;
-                }
 
                 localStorage.setItem('connection_kakao_id', kakaoId);
                 localStorage.setItem('connection_kakao_nickname', nickname);
@@ -646,7 +630,7 @@
 
     function approveUser(kakaoId, name) {
         let updates = {};
-        updates['bowling_approvedKakaoIds/' + kakaoId] = true;
+        updates['bowling_approvedKakaoIds/' + kakaoId] = name;
         updates['bowling_pendingApprovals/' + kakaoId] = null;
         
         if (!players.some(p => p.name === name)) {
@@ -667,20 +651,15 @@
         }
     }
 
-    function kickUser(kakaoId, name, playerDbId) {
-        if (confirm(`'${name}'님을 클럽에서 퇴출(차단)하시겠습니까?`)) {
-            let updates = {};
-            updates['bowling_approvedKakaoIds/' + kakaoId] = null;
-            updates['bowling_blockedKakaoIds/' + kakaoId] = true;
-            
-            if (playerDbId) {
-                players = players.filter(p => p.id !== playerDbId);
-                updates['bowling_players'] = players;
-            }
-
-            db.ref().update(updates).then(() => {
-                alert(`${name}님이 퇴출 및 차단되었습니다.`);
-            });
+    // 영구 차단 없이 명부에서만 깔끔하게 삭제하는 함수
+    function removePlayer(id) {
+        const player = players.find(p => p.id === id);
+        if (!player) return;
+        
+        if (confirm(`'${player.name}'님을 명부에서 삭제하시겠습니까?`)) {
+            players = players.filter(p => p.id !== id);
+            syncPlayersToDB();
+            alert(`${player.name}님이 명부에서 삭제되었습니다.`);
         }
     }
 
@@ -872,16 +851,6 @@
         }
     }
 
-    function removePlayer(id) {
-        const player = players.find(p => p.id === id);
-        if (!player) return;
-        let targetKakaoId = '';
-        Object.keys(approvedKakaoIds).forEach(kId => {
-            if(player.name) targetKakaoId = kId; 
-        });
-        kickUser(targetKakaoId || 'unknown', player.name, id);
-    }
-
     function toggleCheck(id) { const p = players.find(p => p.id === id); if(p) { p.checked = !p.checked; syncPlayersToDB(); } }
     function toggleAll(status) { players.forEach(p => p.checked = status); syncPlayersToDB(); }
 
@@ -904,7 +873,7 @@
                     <input type="number" class="edit-score-input" value="${p.score}" onchange="updatePlayerScore(${p.id}, this.value)">
                     <span style="font-size:13px; color:#64748b;">점</span>
                 </div>
-                <button class="delete-btn" onclick="removePlayer(${p.id})">퇴출(삭제)</button>
+                <button class="delete-btn" onclick="removePlayer(${p.id})">삭제</button>
             </div>
         `).join('');
     }
