@@ -14,6 +14,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js"></script>
 
     <style>
         :root {
@@ -31,10 +32,9 @@
         .auth-card { background: white; padding: 35px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: 100%; max-width: 380px; text-align: center; }
         .auth-card h2 { margin-top: 0; color: var(--primary-color); margin-bottom: 10px; }
         .auth-card p { font-size: 14px; color: #64748b; margin-bottom: 25px; line-height: 1.5; }
-        .auth-input { width: 100%; padding: 12px; font-size: 16px; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 12px; box-sizing: border-box; text-align: center; outline: none; }
-        .auth-input:focus { border-color: var(--primary-color); }
-        .auth-btn { width: 100%; padding: 12px; font-size: 16px; background-color: var(--primary-color); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: background-color 0.2s; }
-        .auth-btn:hover { background-color: #1d4ed8; }
+        
+        .kakao-btn { width: 100%; padding: 12px; font-size: 16px; background-color: #fee500; color: #191919; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: background-color 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .kakao-btn:hover { background-color: #fada0a; }
 
         .header-box { display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 25px; flex-wrap: wrap; }
         .club-logo { width: 75px; height: 75px; object-fit: contain; border-radius: 50%; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); background: white; padding: 4px; border: 2px solid var(--border-color); }
@@ -60,6 +60,9 @@
         button.success:hover { background-color: #15803d; }
         button.danger { background-color: #ef4444; }
         button.danger:hover { background-color: #dc2626; }
+        button.kakao-share { background-color: #fee500; color: #191919; font-weight: 600; }
+        button.kakao-share:hover { background-color: #fada0a; }
+
         .btn-container { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
         .list-header { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); font-weight: 600; font-size: 14px; color: #64748b; flex-wrap: wrap; gap: 8px; }
         .player-list { max-height: 250px; overflow-y: auto; margin-top: 8px; transition: max-height 0.3s ease; }
@@ -89,7 +92,7 @@
         .team-mode-bar label { cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px; color: #1e293b; }
         .game-selector-bar { display: flex; align-items: center; gap: 12px; background: #f1f5f9; padding: 12px 16px; border-radius: 8px; margin-bottom: 15px; flex-wrap: wrap; }
         .game-selector-bar.history-mode { background: #e0f2fe; }
-        .search-bar { width: 100%; max-width: 300px; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; }
+        .search-bar { width: 100%; max-width: 200px; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; }
         .chart-container { position: relative; height: 300px; width: 100%; margin-top: 20px; }
         .stat-summary-box { display: flex; gap: 15px; background: #f1f5f9; padding: 15px; border-radius: 8px; margin-top: 15px; margin-bottom: 25px; justify-content: space-around; flex-wrap: wrap;}
         .stat-item { text-align: center; min-width: 110px; }
@@ -111,13 +114,22 @@
 </head>
 <body>
 
-    <!-- 비밀번호 입력 오버레이 -->
     <div id="authOverlay">
-        <div class="auth-card">
+        <div class="auth-card" id="loginCardView">
             <h2>🎳 Connection</h2>
-            <p>클럽 시스템 접속 비밀번호를 입력해주세요.<br><span style="font-size:12px; color:#94a3b8;">(일반회원: 1248 / 관리자: 1950)</span></p>
-            <input type="password" id="passwordInput" class="auth-input" placeholder="비밀번호 입력">
-            <button class="auth-btn" onclick="verifyPassword()">입장하기</button>
+            <p>클럽 회원 전용 시스템입니다.<br>카카오 계정으로 안전하게 로그인해 주세요.</p>
+            <button class="kakao-btn" onclick="loginWithKakao()">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M9 1C4.58172 1 1 3.79086 1 7.21543C1 9.42055 2.45492 11.352 4.67389 12.4571L3.79159 15.7287C3.69992 16.068 4.08588 16.3263 4.37257 16.1264L8.47225 13.3328C8.64718 13.3444 8.82315 13.3503 10 13.3503C14.4183 13.3503 18 10.5594 18 7.13486C18 3.71029 14.4183 1 10 1Z" fill="#191919"/></svg>
+                카카오로 로그인 / 회원가입
+            </button>
+            <button onclick="loginAsAdminPrompt()" style="margin-top: 12px; width: 100%; background: #475569; font-size: 14px; padding: 10px; border-radius: 8px; border:none; color:white; font-weight:600; cursor:pointer;">🔑 관리자 직접 로그인 (비밀번호)</button>
+        </div>
+
+        <div class="auth-card" id="pendingCardView" style="display: none;">
+            <h2>⏳ 가입 승인 대기 중</h2>
+            <p><strong id="pendingNameDisplay" style="color:var(--primary-color);"></strong>님 환영합니다!<br><br>클럽 관리자의 가입 승인을 기다리고 있습니다. 승인이 완료되면 자동으로 입장이 가능해집니다.</p>
+            <button class="secondary" onclick="logoutKakaoSession()" style="width: 100%; margin-top: 10px;">다른 계정으로 로그인</button>
+            <button onclick="loginAsAdminPrompt()" style="margin-top: 12px; width: 100%; background: #475569; font-size: 14px; padding: 10px; border-radius: 8px; border:none; color:white; font-weight:600; cursor:pointer;">🔑 관리자 직접 로그인 (비밀번호)</button>
         </div>
     </div>
 
@@ -130,10 +142,10 @@
     <div id="loadingMsg">📡 데이터베이스와 연결 중입니다...</div>
 
     <div class="auth-bar" id="authBar">
-        <span>현재 접속 모드: <strong id="modeIndicator" style="color: var(--primary-color);">일반 회원 모드</strong></span>
+        <span>현재 접속 모드: <strong id="modeIndicator" style="color: var(--primary-color);">일반 회원 모드</strong> <span id="userInfoDisplay" style="font-size: 13px; color: #64748b; margin-left: 8px;"></span></span>
         <div style="display: flex; gap: 8px;">
             <button id="authSwitchBtn" onclick="toggleAuthMode()" style="padding: 6px 14px; font-size: 13px;">관리자 모드로 전환</button>
-            <button onclick="logoutSession()" class="secondary" style="padding: 6px 12px; font-size: 13px;">로그아웃</button>
+            <button onclick="logoutKakaoSession()" class="danger" style="padding: 6px 12px; font-size: 13px;">로그아웃</button>
         </div>
     </div>
 
@@ -144,7 +156,13 @@
 
     <div id="main-tab" class="tab-content active">
         <div class="card" id="adminControlCard" style="display: none;">
-            <h3>1. 회원명부 관리 (관리자 전용)</h3>
+            <h3>1. 회원명부 및 가입 승인 관리 (관리자 전용)</h3>
+            
+            <div id="pendingApprovalSection" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 15px; margin-bottom: 20px; display: none;">
+                <h4 style="margin-top: 0; color: #1e40af;">📥 신규 가입 대기 회원 목록</h4>
+                <div id="pendingApprovalList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
+
             <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 15px; flex-wrap: wrap;">
                 <div>
                     <label for="teamCount" style="font-weight: 600; margin-right: 10px;">나눌 팀 수:</label>
@@ -167,7 +185,7 @@
             </div>
 
             <div class="list-header">
-                <span>참석 회원 체크 및 에버리지 확인</span>
+                <span>참석 회원 체크 및 에버리지 확인 (삭제 처리 가능)</span>
                 <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
                     <button type="button" id="expandListBtn" onclick="toggleExpandPlayerList()" style="padding: 4px 8px; font-size: 12px; background: #0284c7;">📖 전체 펼치기</button>
                     <button type="button" onclick="toggleAll(true)" style="padding: 4px 8px; font-size: 12px; background: #64748b;">전체 선택</button>
@@ -191,7 +209,10 @@
         <div class="card" id="resultCard" style="display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                 <h3 style="margin: 0;">2. 게임별 실시간 팀 매칭 & 스코어 기록 (실시간 공유)</h3>
-                <button class="danger" id="cancelMatchBtn" onclick="cancelMatch()" style="padding: 6px 12px; font-size: 13px; display: none;">🛑 당일 정모 취소 (대기 상태로)</button>
+                <div style="display: flex; gap: 8px;">
+                    <button class="kakao-share" onclick="shareMatchToKakao()" style="padding: 6px 12px; font-size: 13px;">💬 카카오톡 공유</button>
+                    <button class="danger" id="cancelMatchBtn" onclick="cancelMatch()" style="padding: 6px 12px; font-size: 13px; display: none;">🛑 당일 정모 취소</button>
+                </div>
             </div>
 
             <div class="team-mode-bar">
@@ -296,6 +317,9 @@
                             <select id="clubStatStartMonth" onchange="renderClubStatsTable()" style="padding: 6px 10px;"></select>
                             <span>~</span>
                             <select id="clubStatEndMonth" onchange="renderClubStatsTable()" style="padding: 6px 10px;"></select>
+                        </div>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button class="kakao-share" onclick="shareClubStatsToKakao()" style="padding: 6px 12px; font-size: 13px;">💬 전체 순위 공유</button>
                             <button class="success" onclick="exportClubStatsExcel()" style="padding: 6px 10px; font-size: 13px;">📥 엑셀 다운</button>
                         </div>
                     </div>
@@ -326,7 +350,12 @@
         <div class="card">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
                 <h3 style="margin: 0;">📅 역대 정모 상세 기록</h3>
-                <input type="text" id="searchInput" class="search-bar" placeholder="🔍 날짜 또는 이름(다중 검색 가능) 검색" oninput="filterHistory()">
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <select id="historyFilterMonthSelect" onchange="filterHistory()" style="padding: 8px 12px; font-weight: 600; color: var(--primary-color);">
+                        <option value="all">📅 전체 월별 보기</option>
+                    </select>
+                    <input type="text" id="searchInput" class="search-bar" placeholder="🔍 이름 검색" oninput="filterHistory()">
+                </div>
             </div>
             <div id="historyContainer" style="margin-top: 15px;"></div>
             <div id="loadMoreContainer" style="text-align: center; margin-top: 20px; display: none;">
@@ -340,7 +369,6 @@
                 <button class="success" onclick="exportAllDB()">📥 전체 데이터 백업 (CSV 다운로드)</button>
                 <input type="file" id="csvFileInput" accept=".csv" style="display: none;" onchange="importCSV(event)">
                 <button class="secondary" onclick="checkPasswordAndExecute(() => document.getElementById('csvFileInput').click())">📤 엑셀(CSV)로 데이터 일괄 업로드</button>
-                <button class="secondary" onclick="changeAccessPassword()" style="background-color: #0284c7;">🔑 일반회원 입장 비밀번호 변경</button>
                 <button class="secondary" onclick="changeAdminPassword()" style="background-color: #475569;">🔒 관리자 비밀번호 변경</button>
                 <button class="secondary" onclick="openMemberFilterModal()" style="background-color: #d97706;">⚙️ 통계 표시 제외 설정</button>
             </div>
@@ -389,14 +417,18 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
+    Kakao.init('12ba06b035aec27dddf5674111077d4d');
+
     let players = [];
     let matchResults = []; 
     let history = []; 
     let liveScores = {}; 
     let hiddenStatMembers = {}; 
-    let accessPassword = "1248"; 
+    let pendingApprovals = {};
+    let approvedKakaoIds = {};
     let adminPassword = "1950";  
     let isAdmin = false;
+    let currentKakaoUser = null;
     
     let allPlayerNames = []; 
     let visibleHistoryCount = 3; 
@@ -409,38 +441,38 @@
     let attendanceChartInstance = null;
     let indivAvgChartInstance = null;
 
-    function verifyPassword() {
-        const inputPwd = document.getElementById('passwordInput').value.trim();
-        if (inputPwd === adminPassword) {
-            isAdmin = true;
-            localStorage.setItem('connection_auth_passed', 'admin');
-            checkAuthAndRender();
-        } else if (inputPwd === accessPassword) {
-            isAdmin = false;
-            localStorage.setItem('connection_auth_passed', 'member');
-            checkAuthAndRender();
-        } else {
-            alert('비밀번호가 올바르지 않습니다.');
-            document.getElementById('passwordInput').value = '';
-            document.getElementById('passwordInput').focus();
+    function loginWithKakao() {
+        const currentUri = window.location.origin + window.location.pathname;
+        Kakao.Auth.authorize({
+            redirectUri: currentUri
+        });
+    }
+
+    window.onload = async function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+
+        if (code) {
+            window.history.replaceState({}, document.title, window.location.pathname);
         }
-    }
 
-    function logoutSession() {
-        localStorage.removeItem('connection_auth_passed');
-        isAdmin = false;
-        location.reload();
-    }
+        const savedId = localStorage.getItem('connection_kakao_id');
+        const savedNick = localStorage.getItem('connection_kakao_nickname');
 
-    window.onload = function() {
-        db.ref('bowling_accessPassword').on('value', (snapshot) => {
-            const pwd = snapshot.val();
-            if(pwd) accessPassword = pwd;
+        if (savedId) {
+            currentKakaoUser = { id: savedId, name: savedNick || '볼러' };
+            if (savedId === 'admin_master') isAdmin = true;
+        }
+
+        db.ref('bowling_approvedKakaoIds').on('value', (snapshot) => {
+            approvedKakaoIds = snapshot.val() || {};
+            checkAuthAndRender();
         });
 
-        db.ref('bowling_adminPassword').on('value', (snapshot) => {
-            const pwd = snapshot.val();
-            if(pwd) adminPassword = pwd;
+        db.ref('bowling_pendingApprovals').on('value', (snapshot) => {
+            pendingApprovals = snapshot.val() || {};
+            checkAuthAndRender();
+            renderPendingApprovals();
         });
 
         db.ref('bowling_players').on('value', (snapshot) => {
@@ -459,6 +491,7 @@
                 history = Object.values(rawData).filter(h => h && h.date && Array.isArray(h.records));
             }
             populateTargetMonthSelect();
+            populateHistoryMonthDropdown();
             populateAttendanceMonthSelects();
             populateIndivMonthSelects();
             populateClubStatMonthSelects();
@@ -475,6 +508,11 @@
         db.ref('bowling_teamCount').on('value', (snapshot) => {
             const count = snapshot.val();
             if(count) document.getElementById('teamCount').value = count;
+        });
+
+        db.ref('bowling_adminPassword').on('value', (snapshot) => {
+            const pwd = snapshot.val();
+            if(pwd) adminPassword = pwd;
         });
 
         db.ref('bowling_liveScores').on('value', (snapshot) => {
@@ -502,24 +540,192 @@
             }
         });
 
-        const savedAuth = localStorage.getItem('connection_auth_passed');
-        if (savedAuth) {
-            isAdmin = (savedAuth === 'admin');
-            checkAuthAndRender();
+        if (Kakao.Auth.getAccessToken() || code) {
+            try {
+                let res = await Kakao.API.request({ url: '/v2/user/me' });
+                const kakaoId = String(res.id);
+                const nickname = res.properties && res.properties.nickname ? res.properties.nickname : '볼러';
+
+                localStorage.setItem('connection_kakao_id', kakaoId);
+                localStorage.setItem('connection_kakao_nickname', nickname);
+                currentKakaoUser = { id: kakaoId, name: nickname };
+
+                if (!isAdmin && !approvedKakaoIds[kakaoId] && kakaoId !== 'admin_master') {
+                    await db.ref('bowling_pendingApprovals/' + kakaoId).set({
+                        name: nickname,
+                        requestedAt: new Date().toLocaleString()
+                    });
+                }
+                checkAuthAndRender();
+            } catch (err) {
+                console.error("사용자 정보 요청 실패:", err);
+            }
         }
     };
 
+    function loginAsAdminPrompt() {
+        const inputPwd = prompt("관리자 비밀번호를 입력해주세요:");
+        if (inputPwd === null) return;
+        if (inputPwd === adminPassword) {
+            isAdmin = true;
+            currentKakaoUser = { id: 'admin_master', name: '관리자' };
+            localStorage.setItem('connection_kakao_id', 'admin_master');
+            localStorage.setItem('connection_kakao_nickname', '관리자');
+            alert("관리자 권한으로 로그인되었습니다.");
+            checkAuthAndRender();
+            updateAuthUI();
+        } else {
+            alert("관리자 비밀번호가 일치하지 않습니다.");
+        }
+    }
+
+    function logoutKakaoSession() {
+        if (Kakao.Auth.getAccessToken()) {
+            Kakao.Auth.logout(() => {});
+        }
+        localStorage.removeItem('connection_kakao_id');
+        localStorage.removeItem('connection_kakao_nickname');
+        isAdmin = false;
+        currentKakaoUser = null;
+        location.reload();
+    }
+
     function checkAuthAndRender() {
-        const savedAuth = localStorage.getItem('connection_auth_passed');
-        if (!savedAuth) {
+        if (!currentKakaoUser) {
             document.getElementById('authOverlay').style.display = 'flex';
+            document.getElementById('loginCardView').style.display = 'block';
+            document.getElementById('pendingCardView').style.display = 'none';
             document.getElementById('mainContainer').style.display = 'none';
             return;
         }
 
-        document.getElementById('authOverlay').style.display = 'none';
-        document.getElementById('mainContainer').style.display = 'block';
-        updateAuthUI();
+        if (isAdmin || currentKakaoUser.id === 'admin_master' || approvedKakaoIds[currentKakaoUser.id]) {
+            document.getElementById('authOverlay').style.display = 'none';
+            document.getElementById('mainContainer').style.display = 'block';
+            document.getElementById('userInfoDisplay').innerText = `(${currentKakaoUser.name}님 카카오 접속중)`;
+            updateAuthUI();
+            return;
+        }
+
+        document.getElementById('authOverlay').style.display = 'flex';
+        document.getElementById('loginCardView').style.display = 'none';
+        document.getElementById('pendingCardView').style.display = 'block';
+        document.getElementById('mainContainer').style.display = 'none';
+        document.getElementById('pendingNameDisplay').innerText = currentKakaoUser.name;
+    }
+
+    function renderPendingApprovals() {
+        const container = document.getElementById('pendingApprovalList');
+        const section = document.getElementById('pendingApprovalSection');
+        const keys = Object.keys(pendingApprovals || {});
+
+        if (keys.length === 0) {
+            section.style.display = 'none';
+            return;
+        }
+
+        section.style.display = 'block';
+        container.innerHTML = keys.map(kakaoId => {
+            const info = pendingApprovals[kakaoId] || {};
+            const name = info.name || '알수없음';
+            return `
+                <div style="display: flex; justify-content: space-between; align-items: center; background: white; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; flex-wrap: wrap; gap: 8px;">
+                    <div>
+                        <strong>카카오 닉네임: ${name}</strong><br>
+                        <span style="font-size: 11px; color: #94a3b8;">신청일시: ${info.requestedAt || '정보 없음'}</span>
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                        <button class="success" onclick="approveUser('${kakaoId}', '${name}')" style="padding: 4px 10px; font-size: 12px;">승인</button>
+                        <button class="danger" onclick="rejectUser('${kakaoId}')" style="padding: 4px 10px; font-size: 12px;">거절</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function approveUser(kakaoId, name) {
+        let updates = {};
+        updates['bowling_approvedKakaoIds/' + kakaoId] = name;
+        updates['bowling_pendingApprovals/' + kakaoId] = null;
+        
+        if (!players.some(p => p.name === name)) {
+            players.push({ id: Date.now(), name: name, score: 150, checked: true, isAuto: false, isDummy: false });
+            updates['bowling_players'] = players;
+        }
+
+        db.ref().update(updates).then(() => {
+            alert(`${name}님의 가입이 승인되었습니다.`);
+        });
+    }
+
+    function rejectUser(kakaoId) {
+        if (confirm("가입 신청을 거절하시겠습니까?")) {
+            db.ref('bowling_pendingApprovals/' + kakaoId).remove().then(() => {
+                alert("거절되었습니다.");
+            });
+        }
+    }
+
+    function removePlayer(id) {
+        const player = players.find(p => p.id === id);
+        if (!player) return;
+        
+        checkPasswordAndExecute(() => {
+            if (confirm(`'${player.name}'님을 명부에서 삭제하시겠습니까?`)) {
+                players = players.filter(p => p.id !== id);
+                syncPlayersToDB();
+                alert(`${player.name}님이 명부에서 삭제되었습니다.`);
+            }
+        });
+    }
+
+    function shareMatchToKakao() {
+        let summaryText = "🎳 [Bowling Connection 정모 현황]\n\n";
+        const teamBoxes = document.querySelectorAll('.team-box');
+        if (teamBoxes.length > 0) {
+            teamBoxes.forEach((box, idx) => {
+                const title = box.querySelector('h3').innerText;
+                const stats = box.querySelector('.team-stats').innerText;
+                summaryText += `📌 ${title} (${stats})\n`;
+                const members = box.querySelectorAll('.team-member');
+                members.forEach(m => { summaryText += `  • ${m.innerText.replace('\n', ': ')}\n`; });
+                summaryText += "\n";
+            });
+        } else {
+            summaryText += "현재 진행 중인 팀 매칭 정보가 없습니다.";
+        }
+        Kakao.Share.sendDefault({ objectType: 'text', text: summaryText.trim(), link: { mobileWebUrl: window.location.href, webUrl: window.location.href } });
+    }
+
+    function shareHistoryRecordToKakao(id) {
+        const recordObj = history.find(h => h.id === id);
+        if (!recordObj) return;
+
+        let text = `🎳 [Bowling Connection 정모 결과]\n📅 날짜: ${recordObj.date}\n\n`;
+        recordObj.records.forEach((r, idx) => {
+            text += `${idx + 1}위 ${r.name} | 총점: ${r.total}점 (에버: ${r.avg})\n`;
+        });
+
+        Kakao.Share.sendDefault({ objectType: 'text', text: text.trim(), link: { mobileWebUrl: window.location.href, webUrl: window.location.href } });
+    }
+
+    function shareClubStatsToKakao() {
+        const { clubStatsArray, startMonth, endMonth } = getClubStatsArrayData();
+        if (clubStatsArray.length === 0) return alert('공유할 통계 데이터가 없습니다.');
+
+        let periodStr = (startMonth && endMonth) ? `(${startMonth} ~ ${endMonth})` : '(전체 기간)';
+        let text = `🎳 [Bowling Connection 클럽 전체 순위]\n📅 조회 기간: ${periodStr}\n\n`;
+        
+        const topList = clubStatsArray.slice(0, 10);
+        topList.forEach((item, idx) => {
+            text += `${idx + 1}위 ${item.name} | 에버: ${item.avg.toFixed(1)}점 (High: ${item.high}, Low: ${item.low})\n`;
+        });
+
+        if (clubStatsArray.length > 10) {
+            text += `\n... 외 ${clubStatsArray.length - 10}명`;
+        }
+
+        Kakao.Share.sendDefault({ objectType: 'text', text: text.trim(), link: { mobileWebUrl: window.location.href, webUrl: window.location.href } });
     }
 
     function toggleAuthMode() {
@@ -528,7 +734,6 @@
             if (inputPwd === null) return;
             if (inputPwd === adminPassword) {
                 isAdmin = true;
-                localStorage.setItem('connection_auth_passed', 'admin');
                 alert("관리자 모드로 전환되었습니다.");
                 updateAuthUI();
             } else {
@@ -536,7 +741,6 @@
             }
         } else {
             isAdmin = false;
-            localStorage.setItem('connection_auth_passed', 'member');
             alert("일반 회원 모드로 전환되었습니다.");
             updateAuthUI();
         }
@@ -589,13 +793,6 @@
         });
     }
 
-    function changeAccessPassword() {
-        checkPasswordAndExecute(() => {
-            const newPwd = prompt("새로운 [일반회원 입장 비밀번호] 입력:");
-            if (newPwd) db.ref('bowling_accessPassword').set(newPwd.trim()).then(() => alert("변경되었습니다."));
-        });
-    }
-
     function changeAdminPassword() {
         checkPasswordAndExecute(() => {
             const newPwd = prompt("새로운 [관리자 비밀번호] 입력:");
@@ -611,7 +808,6 @@
         if (tabId === 'history-tab') updateStatistics();
     }
 
-    document.getElementById('passwordInput').addEventListener('keypress', function(e) { if (e.key === 'Enter') verifyPassword(); });
     document.getElementById('playerName').addEventListener('keypress', function(e) { if (e.key === 'Enter') document.getElementById('playerScore').focus(); });
     document.getElementById('playerScore').addEventListener('keypress', function(e) { if (e.key === 'Enter') addPlayer(); });
 
@@ -633,6 +829,16 @@
         const months = new Set();
         history.forEach(h => { const m = h.date.match(/^(\d{4}[-./]\d{2})/); if(m) months.add(m[1].replace(/[-/]/g, '-')); });
         Array.from(months).sort((a,b)=>b.localeCompare(a)).forEach(m => select.appendChild(new Option(m + '월 정모 기준', m)));
+        select.value = currentVal;
+    }
+
+    function populateHistoryMonthDropdown() {
+        const select = document.getElementById('historyFilterMonthSelect');
+        const currentVal = select.value || 'all';
+        select.innerHTML = '<option value="all">📅 전체 월별 보기</option>';
+        const months = new Set();
+        history.forEach(h => { const m = h.date.match(/^(\d{4}[-./]\d{2})/); if(m) months.add(m[1].replace(/[-/]/g, '-')); });
+        Array.from(months).sort((a,b)=>b.localeCompare(a)).forEach(m => select.appendChild(new Option(m + '월 기록 보기', m)));
         select.value = currentVal;
     }
 
@@ -720,7 +926,6 @@
         }
     }
 
-    function removePlayer(id) { players = players.filter(p => p.id !== id); syncPlayersToDB(); }
     function toggleCheck(id) { const p = players.find(p => p.id === id); if(p) { p.checked = !p.checked; syncPlayersToDB(); } }
     function toggleAll(status) { players.forEach(p => p.checked = status); syncPlayersToDB(); }
 
@@ -917,26 +1122,24 @@
         });
     }
 
-    function renderHistory(dataToRender = history, searchKeywords = []) {
+    function renderHistory(dataToRender = history) {
         const container = document.getElementById('historyContainer');
         const loadMoreContainer = document.getElementById('loadMoreContainer');
         if (!dataToRender || dataToRender.length === 0) { loadMoreContainer.style.display = 'none'; return container.innerHTML = `<div class="empty-stats">검색된 기록이 없습니다.</div>`; }
         
-        const isSearching = searchKeywords.length > 0;
-        loadMoreContainer.style.display = (!isSearching && dataToRender.length > visibleHistoryCount) ? 'block' : 'none';
+        const selectedMonth = document.getElementById('historyFilterMonthSelect').value;
+        const keywordInput = document.getElementById('searchInput').value.toLowerCase().trim();
+        const isFiltering = (selectedMonth !== 'all' || keywordInput !== '');
 
-        container.innerHTML = (isSearching ? dataToRender : dataToRender.slice(0, visibleHistoryCount)).map(h => {
-            let displayRecords = h.records;
-            if (searchKeywords.length > 0) {
-                const nameKeywords = searchKeywords.filter(k => !/\d/.test(k));
-                if (nameKeywords.length > 0) displayRecords = h.records.filter(r => nameKeywords.some(nk => r.name.toLowerCase().includes(nk)));
-                if (displayRecords.length === 0) return '';
-            }
+        loadMoreContainer.style.display = (!isFiltering && dataToRender.length > visibleHistoryCount) ? 'block' : 'none';
+
+        container.innerHTML = (isFiltering ? dataToRender : dataToRender.slice(0, visibleHistoryCount)).map(h => {
             return `
             <div class="history-box">
                 <div style="display: flex; justify-content: space-between; border-bottom: 2px solid var(--primary-color); padding-bottom: 6px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; gap: 8px;">
                     <strong style="font-size: 16px; color: var(--primary-color);">📅 ${h.date}</strong>
                     <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                        <button class="kakao-share" onclick="shareHistoryRecordToKakao(${h.id})" style="padding: 4px 8px; font-size: 12px;">💬 공유</button>
                         <button class="success" onclick="exportToExcel(${h.id})" style="padding: 4px 8px; font-size: 12px;">📥 엑셀</button>
                         <button class="delete-btn" onclick="checkPasswordAndExecute(() => deleteHistory(${h.id}))" style="padding: 4px 8px; font-size: 12px;">삭제</button>
                     </div>
@@ -944,7 +1147,7 @@
                 <div style="overflow-x: auto;">
                     <table class="score-table" style="background: white;">
                         <thead><tr><th>순위</th><th>선수명</th><th>1G</th><th>2G</th><th>3G</th><th>4G</th><th>총점</th><th>평균</th><th>올커버</th></tr></thead>
-                        <tbody>${displayRecords.map((r, i) => {
+                        <tbody>${h.records.map((r, i) => {
                             let covers = [];
                             if(r.c1) covers.push('1G'); if(r.c2) covers.push('2G'); if(r.c3) covers.push('3G'); if(r.c4) covers.push('4G');
                             return `<tr><td>${i+1}위</td><td>${r.name}</td><td>${r.g1}</td><td>${r.g2}</td><td>${r.g3}</td><td>${r.g4}</td><td><strong>${r.total}</strong></td><td>${r.avg}</td><td>${covers.length > 0 ? `<span class="cover-badge">🌟 ${covers.join(', ')}</span>` : '-'}</td></tr>`;
@@ -958,10 +1161,20 @@
     function loadMoreHistory() { visibleHistoryCount += 5; renderHistory(); }
 
     function filterHistory() {
+        const selectedMonth = document.getElementById('historyFilterMonthSelect').value;
         const keywordInput = document.getElementById('searchInput').value.toLowerCase().trim();
-        if (!keywordInput) return renderHistory(history);
-        const keywords = keywordInput.replace(/[./]/g, '-').split(/\s+/).filter(k => k);
-        renderHistory(history.filter(h => keywords.some(k => h.date.replace(/[./]/g, '-').toLowerCase().includes(k) || h.records.some(r => r.name.toLowerCase().includes(k)))), keywords);
+        const nameKeywords = keywordInput.replace(/[./]/g, '-').split(/\s+/).filter(k => k);
+
+        let filtered = history.filter(h => {
+            const hDateClean = h.date.replace(/[-/]/g, '-');
+            const matchMonth = (selectedMonth === 'all' || hDateClean.startsWith(selectedMonth));
+            if (!matchMonth) return false;
+
+            if (nameKeywords.length === 0) return true;
+            return nameKeywords.some(nk => h.date.toLowerCase().includes(nk) || h.records.some(r => r.name.toLowerCase().includes(nk)));
+        });
+
+        renderHistory(filtered);
     }
 
     function exportToExcel(id) {
@@ -983,35 +1196,6 @@
         link.click();
     }
 
-    function importCSV(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const rows = e.target.result.split('\n').map(r => r.trim()).filter(r => r);
-            if (rows.length < 2) return alert('형식이 잘못되었습니다.');
-            let newMap = {};
-            for (let i = 1; i < rows.length; i++) {
-                const cols = rows[i].split(',');
-                if (cols.length < 8) continue;
-                const date = cols[0].trim(), name = cols[1].trim();
-                if (!date || !name || date.includes('위')) continue;
-                if (!newMap[date]) newMap[date] = { id: Date.now() + Math.random(), date, records: [] };
-                newMap[date].records.push({ name, g1: parseFloat(cols[2])||0, g2: parseFloat(cols[3])||0, g3: parseFloat(cols[4])||0, g4: parseFloat(cols[5])||0, total: parseFloat(cols[6])||0, avg: (parseFloat(cols[7])||0).toFixed(1), coverCount: 0 });
-            }
-            Object.keys(newMap).forEach(d => {
-                newMap[d].records.sort((a,b)=>b.total-a.total);
-                let idx = history.findIndex(h => h.date.startsWith(d.split(' ')[0]));
-                if (idx !== -1) { history[idx].records = newMap[d].records; } else { history.push(newMap[d]); }
-            });
-            history.sort((a,b)=>b.date.localeCompare(a.date));
-            syncHistoryToDB();
-            alert('업로드 완료!');
-            event.target.value = '';
-        };
-        reader.readAsText(file, 'utf-8');
-    }
-
     function deleteHistory(id) {
         if (confirm('삭제하시겠습니까?')) { history = history.filter(h => h.id !== id); syncHistoryToDB(); }
     }
@@ -1029,7 +1213,7 @@
         if (mode === 'team') renderTeamStats(); else renderIndividualStats();
     }
 
-    function updateStatistics() { populateStatPlayerSelect(); populateAttendanceMonthSelects(); populateIndivMonthSelects(); populateClubStatMonthSelects(); toggleStatMode(); }
+    function updateStatistics() { populateStatPlayerSelect(); populateAttendanceMonthSelects(); populateIndivMonthSelects(); populateClubStatMonthSelects(); populateHistoryMonthDropdown(); toggleStatMode(); }
 
     function populateStatPlayerSelect() {
         let set = new Set();
