@@ -109,6 +109,12 @@
         .auth-bar { display: flex; justify-content: space-between; align-items: center; background: #e2e8f0; padding: 8px 16px; border-radius: 8px; margin-bottom: 15px; font-size: 14px; }
         .notice-banner { text-align: center; padding: 30px; background: #f1f5f9; border-radius: 12px; color: #475569; font-size: 16px; font-weight: 600; margin-top: 15px; }
         .cover-badge { background: #fef08a; color: #854d0e; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-left: 4px; }
+        
+        /* 모달 스타일 */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 25px; border-radius: 12px; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px; }
+        .modal-header h3 { margin: 0; color: var(--primary-color); }
     </style>
 </head>
 <body>
@@ -306,14 +312,10 @@
                             <span>~</span>
                             <select id="clubStatEndMonth" onchange="renderClubStatsTable()" style="padding: 6px 10px;"></select>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
-                            <label style="font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; color: #b91c1c;">
-                                <input type="checkbox" id="excludeGuests" onchange="renderClubStatsTable()" style="width: 16px; height: 16px; cursor: pointer;" checked> 탈퇴/게스트 회원 제외 (더미, 용병 등)
-                            </label>
-                            <div style="display: flex; gap: 6px;">
-                                <button class="success" onclick="exportClubStatsExcel()" style="padding: 6px 10px; font-size: 13px;">📥 엑셀 다운</button>
-                                <button class="kakao" onclick="shareClubStatsKakao()" style="padding: 6px 10px; font-size: 13px; font-weight: bold;">💬 카카오톡 공유</button>
-                            </div>
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <button class="secondary" onclick="openMemberFilterModal()" style="padding: 6px 12px; font-size: 13px; background-color: #475569;">⚙️ 탈퇴/게스트 회원 표시 설정</button>
+                            <button class="success" onclick="exportClubStatsExcel()" style="padding: 6px 10px; font-size: 13px;">📥 엑셀 다운</button>
+                            <button class="kakao" onclick="shareClubStatsKakao()" style="padding: 6px 10px; font-size: 13px; font-weight: bold;">💬 카카오톡 공유</button>
                         </div>
                     </div>
 
@@ -364,6 +366,25 @@
     </div>
 </div>
 
+<!-- 탈퇴/게스트 회원 표시 설정 모달 창 -->
+<div id="memberFilterModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>⚙️ 통계 회원 표시 관리</h3>
+            <button onclick="closeMemberFilterModal()" class="secondary" style="padding: 4px 10px; font-size: 13px;">✕ 닫기</button>
+        </div>
+        <p style="font-size: 13px; color: #64748b; margin-top: 0;">체크를 해제한 회원은 클럽원 전체 순위 및 통계에서 제외됩니다.</p>
+        <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+            <button onclick="toggleAllMemberFilter(true)" class="secondary" style="padding: 4px 8px; font-size: 12px;">전체 선택</button>
+            <button onclick="toggleAllMemberFilter(false)" class="secondary" style="padding: 4px 8px; font-size: 12px;">전체 해제</button>
+        </div>
+        <div id="modalMemberListContainer" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; background: #f8fafc;"></div>
+        <div style="margin-top: 20px; text-align: right;">
+            <button onclick="saveMemberFilterSettings()" class="success">설정 저장 및 반영</button>
+        </div>
+    </div>
+</div>
+
 <script>
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -391,6 +412,7 @@
     let matchResults = []; 
     let history = []; 
     let liveScores = {}; 
+    let hiddenStatMembers = {}; // 통계에서 제외할 회원명 매핑
     let accessPassword = "1950"; 
     let adminPassword = "1950";  
     let isAdmin = false;
@@ -448,6 +470,11 @@
             renderPlayerList();
             renderHistory();
             updateStatistics();
+        });
+
+        db.ref('bowling_hiddenStatMembers').on('value', (snapshot) => {
+            hiddenStatMembers = snapshot.val() || {};
+            renderClubStatsTable();
         });
 
         db.ref('bowling_teamCount').on('value', (snapshot) => {
@@ -1261,15 +1288,11 @@
     function populateStatPlayerSelect() {
         let allNamesSet = new Set();
         players.forEach(p => {
-            if (!p.name.includes('더미') && !p.name.includes('휴식') && !p.name.includes('용병')) {
-                allNamesSet.add(p.name);
-            }
+            if (!hiddenStatMembers[p.name]) allNamesSet.add(p.name);
         });
         history.forEach(h => { 
             if(h && h.records) h.records.forEach(r => {
-                if (!r.name.includes('더미') && !r.name.includes('휴식') && !r.name.includes('용병')) {
-                    allNamesSet.add(r.name);
-                }
+                if (!hiddenStatMembers[r.name]) allNamesSet.add(r.name);
             }); 
         });
         allPlayerNames = Array.from(allNamesSet).sort();
@@ -1314,8 +1337,13 @@
         const teamAvgs = chronoHistory.map(h => {
             if(!h.records || h.records.length === 0) return 0;
             let hSum = 0;
-            h.records.forEach(r => { let a = parseFloat(r.avg); if(a > 0) { hSum += a; totalSum += a; totalCount++; } });
-            return (hSum / h.records.length).toFixed(1);
+            let validCount = 0;
+            h.records.forEach(r => { 
+                if (hiddenStatMembers[r.name]) return;
+                let a = parseFloat(r.avg); 
+                if(a > 0) { hSum += a; totalSum += a; totalCount++; validCount++; } 
+            });
+            return validCount > 0 ? (hSum / validCount).toFixed(1) : 0;
         });
 
         document.getElementById('statOverallAvg').innerText = totalCount > 0 ? `${(totalSum / totalCount).toFixed(1)}점` : '0점';
@@ -1339,7 +1367,7 @@
         let attendanceMap = {};
         filteredHistoryForAttend.forEach(h => { 
             if(h && h.records) h.records.forEach(r => { 
-                if (r.name.includes('더미') || r.name.includes('휴식') || r.name.includes('용병')) return;
+                if (hiddenStatMembers[r.name]) return;
                 if(!attendanceMap[r.name]) attendanceMap[r.name] = 0; 
                 attendanceMap[r.name]++; 
             }); 
@@ -1406,7 +1434,11 @@
         const startMonth = document.getElementById('indivStartMonth').value;
         const endMonth = document.getElementById('indivEndMonth').value;
         const totalMeets = history.length;
-        if(!playerName || totalMeets === 0) { document.getElementById('indivStatContent').style.display = 'none'; document.getElementById('emptyIndivStats').style.display = 'block'; return; }
+        if(!playerName || totalMeets === 0 || hiddenStatMembers[playerName]) { 
+            document.getElementById('indivStatContent').style.display = 'none'; 
+            document.getElementById('emptyIndivStats').style.display = 'block'; 
+            return; 
+        }
         document.getElementById('indivStatContent').style.display = 'block'; document.getElementById('emptyIndivStats').style.display = 'none';
 
         let filteredHistory = history.filter(h => {
@@ -1466,7 +1498,6 @@
     function getClubStatsArrayData() {
         const startMonth = document.getElementById('clubStatStartMonth').value;
         const endMonth = document.getElementById('clubStatEndMonth').value;
-        const excludeGuests = document.getElementById('excludeGuests').checked;
 
         const filteredHistory = history.filter(h => {
             const mMatch = h.date.match(/^(\d{4}[-./]\d{2})/);
@@ -1483,11 +1514,8 @@
             if (!h || !h.records) return;
             h.records.forEach(r => {
                 const name = r.name;
-                if (excludeGuests) {
-                    if (name.includes('더미') || name.includes('휴식') || name.includes('용병') || name.includes('게스트') || name.includes('탈퇴')) {
-                        return;
-                    }
-                }
+                if (hiddenStatMembers[name]) return; // 체크되어 숨겨진 회원은 제외
+
                 if (!statsMap[name]) {
                     statsMap[name] = { name: name, totalAvgSum: 0, avgCount: 0, high: 0, low: 999, totalGames: 0 };
                 }
@@ -1546,6 +1574,59 @@
         `).join('');
     }
 
+    // 탈퇴/게스트 회원 설정 모달 관련 함수들
+    function openMemberFilterModal() {
+        let allNamesSet = new Set();
+        players.forEach(p => allNamesSet.add(p.name));
+        history.forEach(h => { if(h && h.records) h.records.forEach(r => allNamesSet.add(r.name)); });
+        const uniqueNames = Array.from(allNamesSet).sort();
+
+        if (uniqueNames.length === 0) {
+            alert('등록되거나 기록된 회원이 없습니다.');
+            return;
+        }
+
+        const container = document.getElementById('modalMemberListContainer');
+        container.innerHTML = uniqueNames.map(name => {
+            const isChecked = !hiddenStatMembers[name]; // 체크되어 있으면 통계에 표시됨
+            return `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: white; border-radius: 6px; margin-bottom: 6px; border: 1px solid var(--border-color);">
+                    <label style="cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%;">
+                        <input type="checkbox" class="member-filter-chk" data-name="${name}" ${isChecked ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                        <strong>${name}</strong>
+                    </label>
+                </div>
+            `;
+        }).join('');
+
+        document.getElementById('memberFilterModal').style.display = 'flex';
+    }
+
+    function closeMemberFilterModal() {
+        document.getElementById('memberFilterModal').style.display = 'none';
+    }
+
+    function toggleAllMemberFilter(status) {
+        document.querySelectorAll('.member-filter-chk').forEach(chk => chk.checked = status);
+    }
+
+    function saveMemberFilterSettings() {
+        let newHiddenMap = {};
+        document.querySelectorAll('.member-filter-chk').forEach(chk => {
+            const name = chk.getAttribute('data-name');
+            if (!chk.checked) {
+                newHiddenMap[name] = true; // 체크 해제된 회원은 숨김 처리
+            }
+        });
+
+        db.ref('bowling_hiddenStatMembers').set(newHiddenMap).then(() => {
+            hiddenStatMembers = newHiddenMap;
+            closeMemberFilterModal();
+            updateStatistics();
+            alert('통계 회원 표시 설정이 저장되었습니다.');
+        });
+    }
+
     function shareClubStatsKakao() {
         const { clubStatsArray, startMonth, endMonth } = getClubStatsArrayData();
         if (clubStatsArray.length === 0) return alert('공유할 통계 데이터가 없습니다.');
@@ -1575,7 +1656,7 @@
             let coverStr = covers.length > 0 ? ` (올커버: ${covers.join(', ')})` : '';
 
             text += `${idx + 1}위 | ${r.name} | 총점: ${r.total}점 (평균: ${r.avg})${coverStr}\n`;
-            text + `   └ 1G:${r.g1} | 2G:${r.g2} | 3G:${r.g3} | 4G:${r.g4}\n`;
+            text += `   └ 1G:${r.g1} | 2G:${r.g2} | 3G:${r.g3} | 4G:${r.g4}\n`;
         });
         text += `---------------------------\n💡 Connection 볼링 클럽 관리 시스템`;
 
