@@ -19,8 +19,8 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
-    <!-- 카카오 공유 SDK 추가 -->
-    <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js" integrity="sha384-TiCUE00h649CAMonG018J2ujFgDKW/USORGXctmJUInwtiiXmEoPBvAA5w6ZtnzW" crossorigin="anonymous"></script>
+    <!-- 카카오 공유 SDK 추가 (integrity 및 crossorigin 속성 제거로 차단 문제 해결) -->
+    <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js"></script>
 
     <style>
         :root {
@@ -32,9 +32,8 @@
         }
 
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px; }
-        .container { max-width: 950px; margin: 0 auto; display: none; } /* 초기에는 숨김 처리 (비밀번호 인증 전) */
+        .container { max-width: 950px; margin: 0 auto; display: none; }
         
-        /* 입장 비밀번호 오버레이 스타일 */
         #authOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.85); display: flex; justify-content: center; align-items: center; z-index: 9999; backdrop-filter: blur(5px); }
         .auth-card { background: white; padding: 35px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: 100%; max-width: 380px; text-align: center; }
         .auth-card h2 { margin-top: 0; color: var(--primary-color); margin-bottom: 10px; }
@@ -114,7 +113,6 @@
         .notice-banner { text-align: center; padding: 30px; background: #f1f5f9; border-radius: 12px; color: #475569; font-size: 16px; font-weight: 600; margin-top: 15px; }
         .cover-badge { background: #fef08a; color: #854d0e; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-left: 4px; }
         
-        /* 모달 스타일 */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
         .modal-content { background: white; padding: 25px; border-radius: 12px; width: 90%; max-width: 500px; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
         .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px; }
@@ -123,7 +121,6 @@
 </head>
 <body>
 
-    <!-- 첫 입장 비밀번호 확인 오버레이 -->
     <div id="authOverlay">
         <div class="auth-card">
             <h2>🎳 Connection</h2>
@@ -134,7 +131,6 @@
     </div>
 
 <div class="container" id="mainContainer">
-    <!-- 클럽 마크 및 타이틀 영역 -->
     <div class="header-box">
         <img src="logo.png" alt="Connection Logo" class="club-logo" onerror="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';">
         <h1>Bowling Connection 점수관리 System</h1>
@@ -142,21 +138,17 @@
 
     <div id="loadingMsg">📡 데이터베이스와 연결 중입니다...</div>
 
-    <!-- 접속 모드 표시 바 -->
     <div class="auth-bar" id="authBar">
         <span>현재 접속 모드: <strong id="modeIndicator" style="color: var(--primary-color);">일반 회원 모드</strong></span>
         <button id="authSwitchBtn" onclick="toggleAuthMode()" style="padding: 6px 14px; font-size: 13px;">관리자 모드로 전환</button>
     </div>
 
-    <!-- 네비게이션 탭 -->
     <div class="nav-tabs">
         <button class="nav-tab-btn active" onclick="switchTab('main-tab', this)">🎳 현재 게임 (팀 매칭 & 스코어)</button>
         <button class="nav-tab-btn" onclick="switchTab('history-tab', this)">📈 역대 기록 & 통계 분석</button>
     </div>
 
-    <!-- [첫 번째 탭] 메인 페이지 -->
     <div id="main-tab" class="tab-content active">
-        <!-- 관리자 전용: 회원 명부 및 시작 제어 카드 -->
         <div class="card" id="adminControlCard" style="display: none;">
             <h3>1. 회원명부 및 정모 관리 (관리자 전용)</h3>
             <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 15px; flex-wrap: wrap;">
@@ -195,7 +187,6 @@
             </div>
         </div>
 
-        <!-- 정모 대기 중 안내 배너 -->
         <div class="card" id="waitingNoticeCard">
             <div class="notice-banner">
                 ⏳ 현재 진행 중인 당일 정모가 없습니다.<br>
@@ -203,7 +194,6 @@
             </div>
         </div>
 
-        <!-- 실시간 팀 매칭 & 스코어 입력 카드 -->
         <div class="card" id="resultCard" style="display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                 <h3 style="margin: 0;">2. 게임별 실시간 팀 매칭 & 스코어 기록 (실시간 공유)</h3>
@@ -244,7 +234,6 @@
         </div>
     </div>
 
-    <!-- [두 번째 탭] 역대 기록 및 통계 -->
     <div id="history-tab" class="tab-content">
         <div class="card">
             <h3 style="margin-top: 0;">📊 종합 통계 및 세분화 분석</h3>
@@ -263,7 +252,6 @@
                     <h4 style="margin-top: 20px; color:#334155;">📈 정모별 팀 평균 에버리지 추이</h4>
                     <div class="chart-container"><canvas id="teamAvgChart"></canvas></div>
                     
-                    <!-- 출석률 기간 설정 및 전체 보기 필터 바 -->
                     <div class="game-selector-bar" style="margin-top: 40px; gap: 15px; justify-content: space-between;">
                         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                             <label style="font-weight: 600;">📅 출석률 조회 기간:</label>
@@ -308,7 +296,6 @@
                     <h4 style="margin-top: 20px; color:#334155;">📈 개인 에버리지 추이</h4>
                     <div class="chart-container"><canvas id="indivAvgChart"></canvas></div>
 
-                    <!-- 클럽원 전체 에버리지 / 순위 표 영역 -->
                     <div class="game-selector-bar" style="margin-top: 40px; gap: 15px; justify-content: space-between; flex-wrap: wrap;">
                         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                             <label style="font-weight: 600;">📅 전체 순위 조회 기간:</label>
@@ -354,7 +341,6 @@
             </div>
         </div>
 
-        <!-- 관리자 전용 DB 관리 카드 -->
         <div class="card" id="adminDBControlCard" style="border: 2px solid #e2e8f0; background-color: #f8fafc; display: none;">
             <h3 style="margin-top:0; color: #0f172a;">💾 데이터베이스 관리 (관리자 전용)</h3>
             <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
@@ -369,7 +355,6 @@
     </div>
 </div>
 
-<!-- 통계 표시 제외 설정 모달 창 -->
 <div id="memberFilterModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
@@ -411,9 +396,12 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // 카카오 SDK 초기화 (제공해주신 JavaScript 키 적용)
-    if (window.Kakao && !Kakao.isInitialized()) {
-        Kakao.init('12ba06b035aec27dddf5674111077d4d');
+    try {
+        if (window.Kakao && !Kakao.isInitialized()) {
+            Kakao.init('12ba06b035aec27dddf5674111077d4d');
+        }
+    } catch (e) {
+        console.log("카카오 SDK 초기화 실패");
     }
 
     let players = [];
@@ -1669,38 +1657,31 @@
         });
     }
 
-    // 정식 카카오톡 공유 API 활용 함수
     function shareClubStatsKakao() {
         const { clubStatsArray, startMonth, endMonth } = getClubStatsArrayData();
         if (clubStatsArray.length === 0) return alert('공유할 통계 데이터가 없습니다.');
 
-        let periodStr = (startMonth && endMonth) ? `조회 기간: ${startMonth} ~ ${endMonth}` : `전체 기간 통계`;
-        let topMembers = clubStatsArray.slice(0, 5).map((item, idx) => `${idx + 1}위 ${item.name} (${item.avg.toFixed(1)}점)`).join(', ');
-
+        let periodStr = (startMonth && endMonth) ? `[조회 기간: ${startMonth} ~ ${endMonth}]` : `[전체 기간 통계]`;
+        
         if (window.Kakao && Kakao.isInitialized()) {
+            let topMembers = clubStatsArray.slice(0, 5).map((item, idx) => `${idx + 1}위 ${item.name} (${item.avg.toFixed(1)}점)`).join(', ');
             Kakao.Share.sendDefault({
                 objectType: 'feed',
                 content: {
                     title: '🎳 Bowling Connection 클럽원 순위 통계',
                     description: `${periodStr}\nTOP 상위 멤버: ${topMembers}`,
                     imageUrl: 'https://cdn-icons-png.flaticon.com/512/3394/3394997.png',
-                    link: {
-                        mobileWebUrl: window.location.href,
-                        webUrl: window.location.href,
-                    },
+                    link: { mobileWebUrl: window.location.href, webUrl: window.location.href },
                 },
-                buttons: [
-                    {
-                        title: '시스템에서 확인하기',
-                        link: {
-                            mobileWebUrl: window.location.href,
-                            webUrl: window.location.href,
-                        },
-                    },
-                ],
+                buttons: [{ title: '시스템에서 확인하기', link: { mobileWebUrl: window.location.href, webUrl: window.location.href } }],
             });
         } else {
-            alert('카카오 SDK가 초기화되지 않았거나 로드되지 않았습니다.');
+            let text = `🎳 [Bowling Connection 클럽원 순위 통계]\n${periodStr}\n---------------------------\n`;
+            clubStatsArray.forEach((item, idx) => {
+                text += `${idx + 1}위 | ${item.name} | 에버: ${item.avg.toFixed(1)}점 (High: ${item.high} / Low: ${item.low}) | ${item.games}게임\n`;
+            });
+            text += `---------------------------\n💡 Connection 볼링 클럽 관리 시스템`;
+            copyTextAndAlert(text, "카카오 SDK 로드 실패로 클립보드 복사 방식으로 전환되었습니다.\n카카오톡 채팅창에 붙여넣기(Ctrl+V) 하세요.");
         }
     }
 
@@ -1708,33 +1689,59 @@
         const record = history.find(h => h.id === id);
         if (!record) return;
 
-        let topPlayer = record.records[0] ? `${record.records[0].name} (${record.records[0].total}점)` : '';
-
         if (window.Kakao && Kakao.isInitialized()) {
+            let topPlayer = record.records[0] ? `${record.records[0].name} (${record.records[0].total}점)` : '';
             Kakao.Share.sendDefault({
                 objectType: 'feed',
                 content: {
                     title: `🎳 정모 상세 기록 (${record.date})`,
                     description: `참석 인원: ${record.records.length}명\n1위 🥇 ${topPlayer}`,
                     imageUrl: 'https://cdn-icons-png.flaticon.com/512/3394/3394997.png',
-                    link: {
-                        mobileWebUrl: window.location.href,
-                        webUrl: window.location.href,
-                    },
+                    link: { mobileWebUrl: window.location.href, webUrl: window.location.href },
                 },
-                buttons: [
-                    {
-                        title: '상세 점수 확인하기',
-                        link: {
-                            mobileWebUrl: window.location.href,
-                            webUrl: window.location.href,
-                        },
-                    },
-                ],
+                buttons: [{ title: '상세 점수 확인하기', link: { mobileWebUrl: window.location.href, webUrl: window.location.href } }],
             });
         } else {
-            alert('카카오 SDK가 초기화되지 않았거나 로드되지 않았습니다.');
+            let text = `🎳 [Bowling Connection 정모 상세 기록]\n📅 날짜: ${record.date}\n---------------------------\n`;
+            record.records.forEach((r, idx) => {
+                let covers = [];
+                if(r.c1) covers.push('1G');
+                if(r.c2) covers.push('2G');
+                if(r.c3) covers.push('3G');
+                if(r.c4) covers.push('4G');
+                let coverStr = covers.length > 0 ? ` (올커버: ${covers.join(', ')})` : '';
+
+                text += `${idx + 1}위 | ${r.name} | 총점: ${r.total}점 (평균: ${r.avg})${coverStr}\n`;
+                text += `   └ 1G:${r.g1} | 2G:${r.g2} | 3G:${r.g3} | 4G:${r.g4}\n`;
+            });
+            text += `---------------------------\n💡 Connection 볼링 클럽 관리 시스템`;
+            copyTextAndAlert(text, "카카오 SDK 로드 실패로 클립보드 복사 방식으로 전환되었습니다.\n카카오톡 채팅창에 붙여넣기(Ctrl+V) 하세요.");
         }
+    }
+
+    function copyTextAndAlert(text, alertMsg) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => { alert(alertMsg); }).catch(() => { fallbackCopyText(text, alertMsg); });
+        } else {
+            fallbackCopyText(text, alertMsg);
+        }
+    }
+
+    function fallbackCopyText(text, alertMsg) {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";  
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        try {
+            const successful = document.execCommand('copy');
+            if (successful) alert(alertMsg);
+            else alert("복사에 실패했습니다. 직접 복사해주세요.");
+        } catch (err) {
+            alert("복사 기능을 지원하지 않는 브라우저입니다.");
+        }
+        document.body.removeChild(textarea);
     }
 
     function exportClubStatsExcel() {
