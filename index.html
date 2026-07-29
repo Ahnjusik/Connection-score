@@ -89,7 +89,8 @@
         .team-member { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed var(--border-color); font-size: 14px; }
         .score-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
         .score-table th, .score-table td { border: 1px solid var(--border-color); padding: 8px; text-align: center; }
-        .score-table th { background-color: #f1f5f9; color: #475569; }
+        .score-table th { background-color: #f1f5f9; color: #475569; cursor: pointer; user-select: none; }
+        .score-table th:hover { background-color: #e2e8f0; }
         .score-input { width: 60px; padding: 6px; text-align: center; border: 1px solid var(--border-color); border-radius: 4px; }
         .history-box { background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; margin-bottom: 15px; }
         .team-mode-bar { display: flex; align-items: center; gap: 15px; background: #e2e8f0; padding: 12px 16px; border-radius: 8px; margin-bottom: 10px; flex-wrap: wrap; }
@@ -312,25 +313,25 @@
                             <span>~</span>
                             <select id="clubStatEndMonth" onchange="renderClubStatsTable()" style="padding: 6px 10px;"></select>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                            <button class="secondary" onclick="openMemberFilterModal()" style="padding: 6px 12px; font-size: 13px; background-color: #475569;">⚙️ 탈퇴/게스트 회원 표시 설정</button>
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                             <button class="success" onclick="exportClubStatsExcel()" style="padding: 6px 10px; font-size: 13px;">📥 엑셀 다운</button>
                             <button class="kakao" onclick="shareClubStatsKakao()" style="padding: 6px 10px; font-size: 13px; font-weight: bold;">💬 카카오톡 공유</button>
                         </div>
                     </div>
 
                     <h4 style="margin-top: 20px; color:#334155;">🎳 클럽원 전체 순위 및 기록표 (에버리지 / 로우·하이)</h4>
-                    <div style="overflow-x: auto; margin-top: 15px;">
+                    <div style="font-size: 12px; color: #64748b; margin-bottom: 6px;">💡 표의 항목 제목(순위, 회원명, 에버리지 등)을 클릭하면 오름차순/내림차순 정렬이 가능합니다.</div>
+                    <div style="overflow-x: auto;">
                         <table class="score-table" id="clubStatsTable">
                             <thead>
                                 <tr>
-                                    <th>순위</th>
-                                    <th>회원명</th>
-                                    <th>누적 에버리지</th>
-                                    <th>최고점 (High)</th>
-                                    <th>최저점 (Low)</th>
-                                    <th>편차 (Low-High)</th>
-                                    <th>총 게임 수</th>
+                                    <th onclick="sortClubStats('rank')">순위 <span id="sort_rank"></span></th>
+                                    <th onclick="sortClubStats('name')">회원명 <span id="sort_name"></span></th>
+                                    <th onclick="sortClubStats('avg')">누적 에버리지 <span id="sort_avg"></span></th>
+                                    <th onclick="sortClubStats('high')">최고점 (High) <span id="sort_high"></span></th>
+                                    <th onclick="sortClubStats('low')">최저점 (Low) <span id="sort_low"></span></th>
+                                    <th onclick="sortClubStats('diff')">편차 (Low-High) <span id="sort_diff"></span></th>
+                                    <th onclick="sortClubStats('games')">총 게임 수 <span id="sort_games"></span></th>
                                 </tr>
                             </thead>
                             <tbody id="clubStatsTableBody"></tbody>
@@ -361,16 +362,17 @@
                 <button class="secondary" onclick="checkPasswordAndExecute(() => document.getElementById('csvFileInput').click())">📤 엑셀(CSV)로 데이터 일괄 업로드</button>
                 <button class="secondary" onclick="changeAccessPassword()" style="background-color: #0284c7;">🔑 일반회원 입장 비밀번호 변경</button>
                 <button class="secondary" onclick="changeAdminPassword()" style="background-color: #475569;">🔒 관리자 비밀번호 변경</button>
+                <button class="secondary" onclick="openMemberFilterModal()" style="background-color: #d97706;">⚙️ 통계 표시 제외 설정</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- 탈퇴/게스트 회원 표시 설정 모달 창 -->
+<!-- 통계 표시 제외 설정 모달 창 -->
 <div id="memberFilterModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
-            <h3>⚙️ 통계 회원 표시 관리</h3>
+            <h3>⚙️ 통계 회원 표시 제외 설정</h3>
             <button onclick="closeMemberFilterModal()" class="secondary" style="padding: 4px 10px; font-size: 13px;">✕ 닫기</button>
         </div>
         <p style="font-size: 13px; color: #64748b; margin-top: 0;">체크를 해제한 회원은 클럽원 전체 순위 및 통계에서 제외됩니다.</p>
@@ -412,13 +414,17 @@
     let matchResults = []; 
     let history = []; 
     let liveScores = {}; 
-    let hiddenStatMembers = {}; // 통계에서 제외할 회원명 매핑
+    let hiddenStatMembers = {}; 
     let accessPassword = "1950"; 
     let adminPassword = "1950";  
     let isAdmin = false;
     let allPlayerNames = []; 
     let visibleHistoryCount = 3; 
     let isPlayerListExpanded = false;
+    
+    // 정렬 상태 변수
+    let currentSortColumn = 'avg';
+    let currentSortDirection = 'desc'; // 기본 내림차순 (에버리지 높은 순)
     
     let teamAvgChartInstance = null;
     let attendanceChartInstance = null;
@@ -1514,7 +1520,7 @@
             if (!h || !h.records) return;
             h.records.forEach(r => {
                 const name = r.name;
-                if (hiddenStatMembers[name]) return; // 체크되어 숨겨진 회원은 제외
+                if (hiddenStatMembers[name]) return;
 
                 if (!statsMap[name]) {
                     statsMap[name] = { name: name, totalAvgSum: 0, avgCount: 0, high: 0, low: 999, totalGames: 0 };
@@ -1549,8 +1555,41 @@
             };
         });
 
-        clubStatsArray.sort((a, b) => b.avg - a.avg);
+        // 정렬 로직 적용
+        clubStatsArray.sort((a, b) => {
+            let valA = a[currentSortColumn];
+            let valB = b[currentSortColumn];
+            if (typeof valA === 'string') {
+                return currentSortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            }
+            return currentSortDirection === 'asc' ? valA - valB : valB - valA;
+        });
+
         return { clubStatsArray, startMonth, endMonth };
+    }
+
+    function sortClubStats(column) {
+        if (currentSortColumn === column) {
+            currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            currentSortColumn = column;
+            currentSortDirection = column === 'name' ? 'asc' : 'desc';
+        }
+        updateSortIcons();
+        renderClubStatsTable();
+    }
+
+    function updateSortIcons() {
+        ['rank', 'name', 'avg', 'high', 'low', 'diff', 'games'].forEach(col => {
+            const span = document.getElementById(`sort_${col}`);
+            if (span) {
+                if (currentSortColumn === col) {
+                    span.innerText = currentSortDirection === 'asc' ? ' ▲' : ' ▼';
+                } else {
+                    span.innerText = '';
+                }
+            }
+        });
     }
 
     function renderClubStatsTable() {
@@ -1574,7 +1613,6 @@
         `).join('');
     }
 
-    // 탈퇴/게스트 회원 설정 모달 관련 함수들
     function openMemberFilterModal() {
         let allNamesSet = new Set();
         players.forEach(p => allNamesSet.add(p.name));
@@ -1588,7 +1626,7 @@
 
         const container = document.getElementById('modalMemberListContainer');
         container.innerHTML = uniqueNames.map(name => {
-            const isChecked = !hiddenStatMembers[name]; // 체크되어 있으면 통계에 표시됨
+            const isChecked = !hiddenStatMembers[name]; 
             return `
                 <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: white; border-radius: 6px; margin-bottom: 6px; border: 1px solid var(--border-color);">
                     <label style="cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%;">
@@ -1615,7 +1653,7 @@
         document.querySelectorAll('.member-filter-chk').forEach(chk => {
             const name = chk.getAttribute('data-name');
             if (!chk.checked) {
-                newHiddenMap[name] = true; // 체크 해제된 회원은 숨김 처리
+                newHiddenMap[name] = true; 
             }
         });
 
@@ -1623,7 +1661,7 @@
             hiddenStatMembers = newHiddenMap;
             closeMemberFilterModal();
             updateStatistics();
-            alert('통계 회원 표시 설정이 저장되었습니다.');
+            alert('통계 표시 제외 설정이 저장되었습니다.');
         });
     }
 
