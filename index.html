@@ -111,23 +111,13 @@
 </head>
 <body>
 
-    <!-- 로그인 및 승인 대기 오버레이 -->
+    <!-- 비밀번호 입력 오버레이 -->
     <div id="authOverlay">
-        <!-- 1단계: 이름 입력 및 가입 신청 -->
-        <div class="auth-card" id="loginCardView">
+        <div class="auth-card">
             <h2>🎳 Connection</h2>
-            <p>클럽 회원 전용 시스템입니다.<br>본인의 실제 이름을 입력 후 가입 신청해 주세요.</p>
-            <input type="text" id="signupNameInput" class="auth-input" placeholder="본인 성함 입력" lang="ko">
-            <button class="auth-btn" onclick="requestSignup()">가입 신청하기</button>
-            <button onclick="loginAsAdminPrompt()" style="margin-top: 12px; width: 100%; background: #475569; font-size: 14px; padding: 10px; border-radius: 8px; border:none; color:white; font-weight:600; cursor:pointer;">🔑 관리자 직접 로그인 (비밀번호)</button>
-        </div>
-
-        <!-- 2단계: 승인 대기 중 -->
-        <div class="auth-card" id="pendingCardView" style="display: none;">
-            <h2>⏳ 가입 승인 대기 중</h2>
-            <p><strong id="pendingNameDisplay" style="color:var(--primary-color);"></strong>님 환영합니다!<br><br>클럽 관리자의 가입 승인을 기다리고 있습니다. 승인이 완료되면 자동으로 입장이 가능해집니다.</p>
-            <button class="secondary" onclick="resetSignupSession()" style="width: 100%; margin-top: 10px;">다른 이름으로 다시 신청</button>
-            <button onclick="loginAsAdminPrompt()" style="margin-top: 12px; width: 100%; background: #475569; font-size: 14px; padding: 10px; border-radius: 8px; border:none; color:white; font-weight:600; cursor:pointer;">🔑 관리자 직접 로그인 (비밀번호)</button>
+            <p>클럽 시스템 접속 비밀번호를 입력해주세요.<br><span style="font-size:12px; color:#94a3b8;">(일반회원: 1248 / 관리자: 1950)</span></p>
+            <input type="password" id="passwordInput" class="auth-input" placeholder="비밀번호 입력">
+            <button class="auth-btn" onclick="verifyPassword()">입장하기</button>
         </div>
     </div>
 
@@ -140,10 +130,10 @@
     <div id="loadingMsg">📡 데이터베이스와 연결 중입니다...</div>
 
     <div class="auth-bar" id="authBar">
-        <span>현재 접속 모드: <strong id="modeIndicator" style="color: var(--primary-color);">일반 회원 모드</strong> <span id="userInfoDisplay" style="font-size: 13px; color: #64748b; margin-left: 8px;"></span></span>
+        <span>현재 접속 모드: <strong id="modeIndicator" style="color: var(--primary-color);">일반 회원 모드</strong></span>
         <div style="display: flex; gap: 8px;">
             <button id="authSwitchBtn" onclick="toggleAuthMode()" style="padding: 6px 14px; font-size: 13px;">관리자 모드로 전환</button>
-            <button onclick="requestWithdrawal()" class="danger" style="padding: 6px 12px; font-size: 13px;">회원 탈퇴</button>
+            <button onclick="logoutSession()" class="secondary" style="padding: 6px 12px; font-size: 13px;">로그아웃</button>
         </div>
     </div>
 
@@ -154,14 +144,7 @@
 
     <div id="main-tab" class="tab-content active">
         <div class="card" id="adminControlCard" style="display: none;">
-            <h3>1. 회원명부 및 가입 승인 관리 (관리자 전용)</h3>
-            
-            <!-- 가입 대기 회원 승인 박스 -->
-            <div id="pendingApprovalSection" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 15px; margin-bottom: 20px; display: none;">
-                <h4 style="margin-top: 0; color: #1e40af;">📥 신규 가입 대기 회원 목록</h4>
-                <div id="pendingApprovalList" style="display: flex; flex-direction: column; gap: 8px;"></div>
-            </div>
-
+            <h3>1. 회원명부 관리 (관리자 전용)</h3>
             <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 15px; flex-wrap: wrap;">
                 <div>
                     <label for="teamCount" style="font-weight: 600; margin-right: 10px;">나눌 팀 수:</label>
@@ -184,7 +167,7 @@
             </div>
 
             <div class="list-header">
-                <span>참석 회원 체크 및 에버리지 확인 (탈퇴 처리 가능)</span>
+                <span>참석 회원 체크 및 에버리지 확인</span>
                 <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
                     <button type="button" id="expandListBtn" onclick="toggleExpandPlayerList()" style="padding: 4px 8px; font-size: 12px; background: #0284c7;">📖 전체 펼치기</button>
                     <button type="button" onclick="toggleAll(true)" style="padding: 4px 8px; font-size: 12px; background: #64748b;">전체 선택</button>
@@ -411,12 +394,9 @@
     let history = []; 
     let liveScores = {}; 
     let hiddenStatMembers = {}; 
-    let pendingApprovals = {};
-    let approvedNames = {};
-    let accessPassword = "1950"; 
+    let accessPassword = "1248"; 
     let adminPassword = "1950";  
     let isAdmin = false;
-    let currentMyName = null;
     
     let allPlayerNames = []; 
     let visibleHistoryCount = 3; 
@@ -429,65 +409,38 @@
     let attendanceChartInstance = null;
     let indivAvgChartInstance = null;
 
-    function requestSignup() {
-        const nameInput = document.getElementById('signupNameInput').value.trim();
-        if (!nameInput) {
-            alert('본인 성함을 입력해주세요.');
-            return;
-        }
-
-        let signupKey = 'user_' + btoa(encodeURIComponent(nameInput)).replace(/=/g, '');
-        localStorage.setItem('connection_my_name_key', signupKey);
-        localStorage.setItem('connection_my_real_name', nameInput);
-
-        db.ref('bowling_pendingApprovals/' + signupKey).set({
-            name: nameInput,
-            requestedAt: new Date().toLocaleString()
-        }).then(() => {
-            currentMyName = nameInput;
-            checkAuthAndRender();
-        });
-    }
-
-    // 관리자 직접 로그인 버튼 함수
-    function loginAsAdminPrompt() {
-        const inputPwd = prompt("관리자 비밀번호를 입력해주세요:");
-        if (inputPwd === null) return;
+    function verifyPassword() {
+        const inputPwd = document.getElementById('passwordInput').value.trim();
         if (inputPwd === adminPassword) {
             isAdmin = true;
-            currentMyName = "관리자";
-            localStorage.setItem('connection_my_real_name', "관리자");
-            localStorage.setItem('connection_my_name_key', "admin_master");
-            alert("관리자 권한으로 로그인되었습니다.");
+            localStorage.setItem('connection_auth_passed', 'admin');
             checkAuthAndRender();
-            updateAuthUI();
+        } else if (inputPwd === accessPassword) {
+            isAdmin = false;
+            localStorage.setItem('connection_auth_passed', 'member');
+            checkAuthAndRender();
         } else {
-            alert("관리자 비밀번호가 일치하지 않습니다.");
+            alert('비밀번호가 올바르지 않습니다.');
+            document.getElementById('passwordInput').value = '';
+            document.getElementById('passwordInput').focus();
         }
     }
 
-    function resetSignupSession() {
-        localStorage.removeItem('connection_my_name_key');
-        localStorage.removeItem('connection_my_real_name');
+    function logoutSession() {
+        localStorage.removeItem('connection_auth_passed');
         isAdmin = false;
         location.reload();
     }
 
     window.onload = function() {
-        currentMyName = localStorage.getItem('connection_my_real_name');
-        if (localStorage.getItem('connection_my_name_key') === 'admin_master') {
-            isAdmin = true;
-        }
-
-        db.ref('bowling_approvedNames').on('value', (snapshot) => {
-            approvedNames = snapshot.val() || {};
-            checkAuthAndRender();
+        db.ref('bowling_accessPassword').on('value', (snapshot) => {
+            const pwd = snapshot.val();
+            if(pwd) accessPassword = pwd;
         });
 
-        db.ref('bowling_pendingApprovals').on('value', (snapshot) => {
-            pendingApprovals = snapshot.val() || {};
-            checkAuthAndRender();
-            renderPendingApprovals();
+        db.ref('bowling_adminPassword').on('value', (snapshot) => {
+            const pwd = snapshot.val();
+            if(pwd) adminPassword = pwd;
         });
 
         db.ref('bowling_players').on('value', (snapshot) => {
@@ -524,16 +477,6 @@
             if(count) document.getElementById('teamCount').value = count;
         });
 
-        db.ref('bowling_accessPassword').on('value', (snapshot) => {
-            const pwd = snapshot.val();
-            if(pwd) accessPassword = pwd;
-        });
-
-        db.ref('bowling_adminPassword').on('value', (snapshot) => {
-            const pwd = snapshot.val();
-            if(pwd) adminPassword = pwd;
-        });
-
         db.ref('bowling_liveScores').on('value', (snapshot) => {
             liveScores = snapshot.val() || {};
             const activePlayers = players.filter(p => p.checked);
@@ -558,97 +501,25 @@
                 document.getElementById('waitingNoticeCard').style.display = 'block';
             }
         });
+
+        const savedAuth = localStorage.getItem('connection_auth_passed');
+        if (savedAuth) {
+            isAdmin = (savedAuth === 'admin');
+            checkAuthAndRender();
+        }
     };
 
     function checkAuthAndRender() {
-        if (!currentMyName) {
+        const savedAuth = localStorage.getItem('connection_auth_passed');
+        if (!savedAuth) {
             document.getElementById('authOverlay').style.display = 'flex';
-            document.getElementById('loginCardView').style.display = 'block';
-            document.getElementById('pendingCardView').style.display = 'none';
             document.getElementById('mainContainer').style.display = 'none';
             return;
         }
 
-        let signupKey = localStorage.getItem('connection_my_name_key');
-
-        if (isAdmin || signupKey === 'admin_master' || approvedNames[signupKey] || approvedNames[currentMyName]) {
-            document.getElementById('authOverlay').style.display = 'none';
-            document.getElementById('mainContainer').style.display = 'block';
-            document.getElementById('userInfoDisplay').innerText = `(${currentMyName}님 접속중)`;
-            updateAuthUI();
-            return;
-        }
-
-        document.getElementById('authOverlay').style.display = 'flex';
-        document.getElementById('loginCardView').style.display = 'none';
-        document.getElementById('pendingCardView').style.display = 'block';
-        document.getElementById('mainContainer').style.display = 'none';
-        document.getElementById('pendingNameDisplay').innerText = currentMyName;
-    }
-
-    function renderPendingApprovals() {
-        const container = document.getElementById('pendingApprovalList');
-        const section = document.getElementById('pendingApprovalSection');
-        const keys = Object.keys(pendingApprovals);
-
-        if (keys.length === 0) {
-            section.style.display = 'none';
-            return;
-        }
-
-        section.style.display = 'block';
-        container.innerHTML = keys.map(signupKey => {
-            const info = pendingApprovals[signupKey] || {};
-            const name = info.name || signupKey;
-            return `
-                <div style="display: flex; justify-content: space-between; align-items: center; background: white; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; flex-wrap: wrap; gap: 8px;">
-                    <div>
-                        <strong>회원 이름: ${name}</strong><br>
-                        <span style="font-size: 11px; color: #94a3b8;">신청일시: ${info.requestedAt || '정보 없음'}</span>
-                    </div>
-                    <div style="display: flex; gap: 6px;">
-                        <button class="success" onclick="approveUser('${signupKey}', '${name}')" style="padding: 4px 10px; font-size: 12px;">승인</button>
-                        <button class="danger" onclick="rejectUser('${signupKey}')" style="padding: 4px 10px; font-size: 12px;">거절</button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
-
-    function approveUser(signupKey, name) {
-        let updates = {};
-        updates['bowling_approvedNames/' + signupKey] = true;
-        updates['bowling_approvedNames/' + name] = true;
-        updates['bowling_pendingApprovals/' + signupKey] = null;
-        
-        if (!players.some(p => p.name === name)) {
-            players.push({ id: Date.now(), name: name, score: 150, checked: true, isAuto: false, isDummy: false });
-            updates['bowling_players'] = players;
-        }
-
-        db.ref().update(updates).then(() => {
-            alert(`${name}님의 가입이 승인되었습니다.`);
-        });
-    }
-
-    function rejectUser(signupKey) {
-        if (confirm("가입 신청을 거절하시겠습니까?")) {
-            db.ref('bowling_pendingApprovals/' + signupKey).remove().then(() => {
-                alert("거절되었습니다.");
-            });
-        }
-    }
-
-    function requestWithdrawal() {
-        if (confirm("정말 클럽 회원 탈퇴를 진행하시겠습니까?")) {
-            let signupKey = localStorage.getItem('connection_my_name_key');
-            let updates = {};
-            updates['bowling_approvedNames/' + signupKey] = null;
-            updates['bowling_approvedNames/' + currentMyName] = null;
-            db.ref().update(updates).then(() => {
-                resetSignupSession();
-            });
-        }
+        document.getElementById('authOverlay').style.display = 'none';
+        document.getElementById('mainContainer').style.display = 'block';
+        updateAuthUI();
     }
 
     function toggleAuthMode() {
@@ -657,14 +528,15 @@
             if (inputPwd === null) return;
             if (inputPwd === adminPassword) {
                 isAdmin = true;
+                localStorage.setItem('connection_auth_passed', 'admin');
                 alert("관리자 모드로 전환되었습니다.");
                 updateAuthUI();
-                checkAuthAndRender();
             } else {
                 alert("비밀번호가 일치하지 않습니다.");
             }
         } else {
             isAdmin = false;
+            localStorage.setItem('connection_auth_passed', 'member');
             alert("일반 회원 모드로 전환되었습니다.");
             updateAuthUI();
         }
@@ -739,7 +611,7 @@
         if (tabId === 'history-tab') updateStatistics();
     }
 
-    document.getElementById('signupNameInput').addEventListener('keypress', function(e) { if (e.key === 'Enter') requestSignup(); });
+    document.getElementById('passwordInput').addEventListener('keypress', function(e) { if (e.key === 'Enter') verifyPassword(); });
     document.getElementById('playerName').addEventListener('keypress', function(e) { if (e.key === 'Enter') document.getElementById('playerScore').focus(); });
     document.getElementById('playerScore').addEventListener('keypress', function(e) { if (e.key === 'Enter') addPlayer(); });
 
@@ -848,20 +720,7 @@
         }
     }
 
-    // [회원 탈퇴/삭제 기능] 명부에서 회원을 삭제하고 승인 권한도 함께 회수
-    function removePlayer(id) {
-        const player = players.find(p => p.id === id);
-        if (!player) return;
-        if (confirm(`'${player.name}'님을 명부에서 삭제(탈퇴)하시겠습니까?`)) {
-            players = players.filter(p => p.id !== id);
-            syncPlayersToDB();
-            // 승인 내역에서도 제거하여 다시 가입 신청하도록 처리
-            let updates = {};
-            updates['bowling_approvedNames/' + player.name] = null;
-            db.ref().update(updates);
-        }
-    }
-
+    function removePlayer(id) { players = players.filter(p => p.id !== id); syncPlayersToDB(); }
     function toggleCheck(id) { const p = players.find(p => p.id === id); if(p) { p.checked = !p.checked; syncPlayersToDB(); } }
     function toggleAll(status) { players.forEach(p => p.checked = status); syncPlayersToDB(); }
 
@@ -884,7 +743,7 @@
                     <input type="number" class="edit-score-input" value="${p.score}" onchange="updatePlayerScore(${p.id}, this.value)">
                     <span style="font-size:13px; color:#64748b;">점</span>
                 </div>
-                <button class="delete-btn" onclick="removePlayer(${p.id})">탈퇴(삭제)</button>
+                <button class="delete-btn" onclick="removePlayer(${p.id})">삭제</button>
             </div>
         `).join('');
     }
@@ -1092,7 +951,7 @@
                         }).join('')}</tbody>
                     </table>
                 </div>
-            `;
+            </div>`;
         }).join('');
     }
 
