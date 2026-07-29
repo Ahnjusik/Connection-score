@@ -116,19 +116,18 @@
     <div id="authOverlay">
         <div class="auth-card" id="loginCardView">
             <h2>🎳 Connection</h2>
-            <p>클럽 회원 전용 시스템입니다.<br>카카오 계정으로 안전하게 로그인해 주세요.</p>
-            <button class="kakao-btn" onclick="loginWithKakaoDirect()">
+            <p>클럽 회원 전용 시스템입니다.<br>본인의 이름을 입력하여 로그인해 주세요.</p>
+            <button class="kakao-btn" onclick="loginWithRealNameInput()">
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M9 1C4.58172 1 1 3.79086 1 7.21543C1 9.42055 2.45492 11.352 4.67389 12.4571L3.79159 15.7287C3.69992 16.068 4.08588 16.3263 4.37257 16.1264L8.47225 13.3328C8.64718 13.3444 8.82315 13.3503 10 13.3503C14.4183 13.3503 18 10.5594 18 7.13486C18 3.71029 14.4183 1 10 1Z" fill="#191919"/></svg>
-                카카오로 로그인 / 회원가입
+                회원 이름으로 로그인 / 가입 신청
             </button>
             <button onclick="loginAsAdminPrompt()" style="margin-top: 12px; width: 100%; background: #475569; font-size: 14px; padding: 10px; border-radius: 8px; border:none; color:white; font-weight:600; cursor:pointer;">🔑 관리자 직접 로그인 (비밀번호)</button>
-            <button onclick="loginAsMemberDirect()" style="margin-top: 8px; width: 100%; background: #0284c7; font-size: 14px; padding: 10px; border-radius: 8px; border:none; color:white; font-weight:600; cursor:pointer;">👤 일반회원 간편 이름 입장</button>
         </div>
 
         <div class="auth-card" id="pendingCardView" style="display: none;">
             <h2>⏳ 가입 승인 대기 중</h2>
             <p><strong id="pendingNameDisplay" style="color:var(--primary-color);"></strong>님 환영합니다!<br><br>클럽 관리자의 가입 승인을 기다리고 있습니다. 승인이 완료되면 자동으로 입장이 가능해집니다.</p>
-            <button class="secondary" onclick="logoutKakaoSession()" style="width: 100%; margin-top: 10px;">다른 계정으로 로그인</button>
+            <button class="secondary" onclick="logoutSession()" style="width: 100%; margin-top: 10px;">다른 이름으로 변경</button>
             <button onclick="loginAsAdminPrompt()" style="margin-top: 12px; width: 100%; background: #475569; font-size: 14px; padding: 10px; border-radius: 8px; border:none; color:white; font-weight:600; cursor:pointer;">🔑 관리자 직접 로그인 (비밀번호)</button>
         </div>
     </div>
@@ -145,7 +144,7 @@
         <span>현재 접속 모드: <strong id="modeIndicator" style="color: var(--primary-color);">일반 회원 모드</strong> <span id="userInfoDisplay" style="font-size: 13px; color: #64748b; margin-left: 8px;"></span></span>
         <div style="display: flex; gap: 8px;">
             <button id="authSwitchBtn" onclick="toggleAuthMode()" style="padding: 6px 14px; font-size: 13px;">관리자 모드로 전환</button>
-            <button onclick="logoutKakaoSession()" class="danger" style="padding: 6px 12px; font-size: 13px;">로그아웃</button>
+            <button onclick="logoutSession()" class="danger" style="padding: 6px 12px; font-size: 13px;">로그아웃</button>
         </div>
     </div>
 
@@ -417,8 +416,6 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    const KAKAO_CLIENT_ID = '12ba06b035aec27dddf5674111077d4d';
-
     let players = [];
     let matchResults = []; 
     let history = []; 
@@ -428,7 +425,7 @@
     let approvedKakaoIds = {};
     let adminPassword = "1950";  
     let isAdmin = false;
-    let currentKakaoUser = null;
+    let currentUser = null;
     
     let allPlayerNames = []; 
     let visibleHistoryCount = 3; 
@@ -441,55 +438,48 @@
     let attendanceChartInstance = null;
     let indivAvgChartInstance = null;
 
-    // 카카오 공식 인증 URL로 직접 이동 (리다이렉트 튕김 원천 차단)
-    function loginWithKakaoDirect() {
-        const redirectUri = window.location.origin + window.location.pathname;
-        const kakaoAuthUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code`;
-        window.location.href = kakaoAuthUrl;
-    }
-
-    // 일반회원 간편 이름 입장 기능 추가 (카카오 로그인이 환경에 따라 안 될 때 즉시 사용 가능)
-    function loginAsMemberDirect() {
-        const name = prompt("본인의 클럽 회원 이름을 입력해주세요:");
+    // 본인 이름 입력하여 로그인 및 가입 신청
+    function loginWithRealNameInput() {
+        const name = prompt("본인의 클럽 회원 이름을 정확히 입력해주세요:");
         if (!name) return;
         const cleanName = name.trim();
-        if (cleanName) {
-            currentKakaoUser = { id: 'member_' + cleanName, name: cleanName };
-            localStorage.setItem('connection_kakao_id', currentKakaoUser.id);
-            localStorage.setItem('connection_kakao_nickname', cleanName);
+        if (!cleanName) return;
+
+        const uniqueId = 'user_' + Date.now();
+        currentUser = { id: uniqueId, name: cleanName };
+        localStorage.setItem('connection_user_id', uniqueId);
+        localStorage.setItem('connection_user_name', cleanName);
+
+        // 승인 목록에 이미 있는 이름인지 체크 후 가입 신청 등록
+        db.ref('bowling_approvedKakaoIds').once('value', (snap) => {
+            const approved = snap.val() || {};
+            const isAlreadyApproved = Object.values(approved).includes(cleanName) || players.some(p => p.name === cleanName);
             
-            // 관리자 승인 목록에 없으면 자동으로 가입 신청 등록
-            db.ref('bowling_approvedKakaoIds').once('value', (snap) => {
-                const approved = snap.val() || {};
-                const isApproved = Object.values(approved).includes(cleanName) || players.some(p => p.name === cleanName);
-                if (!isApproved) {
-                    db.ref('bowling_pendingApprovals/' + currentKakaoUser.id).set({
-                        name: cleanName,
-                        requestedAt: new Date().toLocaleString()
-                    });
+            if (!isAlreadyApproved) {
+                db.ref('bowling_pendingApprovals/' + uniqueId).set({
+                    name: cleanName,
+                    requestedAt: new Date().toLocaleString()
+                });
+            } else {
+                // 이미 승인된 이름이면 바로 승인 목록에 연결
+                for (let [id, appName] of Object.entries(approved)) {
+                    if (appName === cleanName) {
+                        localStorage.setItem('connection_user_id', id);
+                        currentUser.id = id;
+                        break;
+                    }
                 }
-                checkAuthAndRender();
-            });
-        }
+            }
+            checkAuthAndRender();
+        });
     }
 
     window.onload = async function() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const code = urlParams.get('code');
+        const savedId = localStorage.getItem('connection_user_id');
+        const savedName = localStorage.getItem('connection_user_name');
 
-        if (code) {
-            // 카카오에서 인가 코드를 받아온 경우 시뮬레이션 로그인 처리
-            window.history.replaceState({}, document.title, window.location.pathname);
-            currentKakaoUser = { id: 'kakao_code_' + code.substring(0, 8), name: '카카오회원' };
-            localStorage.setItem('connection_kakao_id', currentKakaoUser.id);
-            localStorage.setItem('connection_kakao_nickname', '카카오회원');
-        }
-
-        const savedId = localStorage.getItem('connection_kakao_id');
-        const savedNick = localStorage.getItem('connection_kakao_nickname');
-
-        if (savedId) {
-            currentKakaoUser = { id: savedId, name: savedNick || '볼러' };
+        if (savedId && savedName) {
+            currentUser = { id: savedId, name: savedName };
             if (savedId === 'admin_master') isAdmin = true;
         }
 
@@ -568,15 +558,6 @@
                 document.getElementById('waitingNoticeCard').style.display = 'block';
             }
         });
-
-        // code가 방금 들어왔고 아직 펜딩에 등록 안 된 경우 신규 등록
-        if (code && currentKakaoUser && !isAdmin && !approvedKakaoIds[currentKakaoUser.id] && currentKakaoUser.id !== 'admin_master') {
-            await db.ref('bowling_pendingApprovals/' + currentKakaoUser.id).set({
-                name: currentKakaoUser.name,
-                requestedAt: new Date().toLocaleString()
-            });
-        }
-        checkAuthAndRender();
     };
 
     function loginAsAdminPrompt() {
@@ -584,9 +565,9 @@
         if (inputPwd === null) return;
         if (inputPwd === adminPassword) {
             isAdmin = true;
-            currentKakaoUser = { id: 'admin_master', name: '관리자' };
-            localStorage.setItem('connection_kakao_id', 'admin_master');
-            localStorage.setItem('connection_kakao_nickname', '관리자');
+            currentUser = { id: 'admin_master', name: '관리자' };
+            localStorage.setItem('connection_user_id', 'admin_master');
+            localStorage.setItem('connection_user_name', '관리자');
             alert("관리자 권한으로 로그인되었습니다.");
             checkAuthAndRender();
             updateAuthUI();
@@ -595,16 +576,16 @@
         }
     }
 
-    function logoutKakaoSession() {
-        localStorage.removeItem('connection_kakao_id');
-        localStorage.removeItem('connection_kakao_nickname');
+    function logoutSession() {
+        localStorage.removeItem('connection_user_id');
+        localStorage.removeItem('connection_user_name');
         isAdmin = false;
-        currentKakaoUser = null;
+        currentUser = null;
         location.reload();
     }
 
     function checkAuthAndRender() {
-        if (!currentKakaoUser) {
+        if (!currentUser) {
             document.getElementById('authOverlay').style.display = 'flex';
             document.getElementById('loginCardView').style.display = 'block';
             document.getElementById('pendingCardView').style.display = 'none';
@@ -612,10 +593,10 @@
             return;
         }
 
-        if (isAdmin || currentKakaoUser.id === 'admin_master' || approvedKakaoIds[currentKakaoUser.id]) {
+        if (isAdmin || currentUser.id === 'admin_master' || approvedKakaoIds[currentUser.id] || Object.values(approvedKakaoIds).includes(currentUser.name)) {
             document.getElementById('authOverlay').style.display = 'none';
             document.getElementById('mainContainer').style.display = 'block';
-            document.getElementById('userInfoDisplay').innerText = `(${currentKakaoUser.name}님 접속중)`;
+            document.getElementById('userInfoDisplay').innerText = `(${currentUser.name}님 접속중)`;
             updateAuthUI();
             return;
         }
@@ -624,7 +605,7 @@
         document.getElementById('loginCardView').style.display = 'none';
         document.getElementById('pendingCardView').style.display = 'block';
         document.getElementById('mainContainer').style.display = 'none';
-        document.getElementById('pendingNameDisplay').innerText = currentKakaoUser.name;
+        document.getElementById('pendingNameDisplay').innerText = currentUser.name;
     }
 
     function renderPendingApprovals() {
@@ -638,28 +619,28 @@
         }
 
         section.style.display = 'block';
-        container.innerHTML = keys.map(kakaoId => {
-            const info = pendingApprovals[kakaoId] || {};
+        container.innerHTML = keys.map(userId => {
+            const info = pendingApprovals[userId] || {};
             const name = info.name || '알수없음';
             return `
                 <div style="display: flex; justify-content: space-between; align-items: center; background: white; padding: 8px 12px; border-radius: 6px; border: 1px solid #cbd5e1; flex-wrap: wrap; gap: 8px;">
                     <div>
-                        <strong>회원/닉네임: ${name}</strong><br>
+                        <strong>신청 회원명: <span style="color:var(--primary-color); font-size:16px;">${name}</span></strong><br>
                         <span style="font-size: 11px; color: #94a3b8;">신청일시: ${info.requestedAt || '정보 없음'}</span>
                     </div>
                     <div style="display: flex; gap: 6px;">
-                        <button class="success" onclick="approveUser('${kakaoId}', '${name}')" style="padding: 4px 10px; font-size: 12px;">승인</button>
-                        <button class="danger" onclick="rejectUser('${kakaoId}')" style="padding: 4px 10px; font-size: 12px;">거절</button>
+                        <button class="success" onclick="approveUser('${userId}', '${name}')" style="padding: 4px 10px; font-size: 12px;">승인</button>
+                        <button class="danger" onclick="rejectUser('${userId}')" style="padding: 4px 10px; font-size: 12px;">거절</button>
                     </div>
                 </div>
             `;
         }).join('');
     }
 
-    function approveUser(kakaoId, name) {
+    function approveUser(userId, name) {
         let updates = {};
-        updates['bowling_approvedKakaoIds/' + kakaoId] = name;
-        updates['bowling_pendingApprovals/' + kakaoId] = null;
+        updates['bowling_approvedKakaoIds/' + userId] = name;
+        updates['bowling_pendingApprovals/' + userId] = null;
         
         if (!players.some(p => p.name === name)) {
             players.push({ id: Date.now(), name: name, score: 150, checked: true, isAuto: false, isDummy: false });
@@ -671,32 +652,31 @@
         });
     }
 
-    function rejectUser(kakaoId) {
+    function rejectUser(userId) {
         if (confirm("가입 신청을 거절하시겠습니까?")) {
-            db.ref('bowling_pendingApprovals/' + kakaoId).remove().then(() => {
+            db.ref('bowling_pendingApprovals/' + userId).remove().then(() => {
                 alert("거절되었습니다.");
             });
         }
     }
 
-  function removePlayer(id) {
+    // 명부에서 삭제할 때 접근 권한(승인 목록)까지 완벽하게 박탈하여 재접근 차단
+    function removePlayer(id) {
         const player = players.find(p => p.id === id);
         if (!player) return;
         
         checkPasswordAndExecute(() => {
             if (confirm(`'${player.name}'님을 명부에서 삭제하고 클럽 접속 권한을 박탈하시겠습니까?`)) {
-                // 1. players 배열에서 제거
                 players = players.filter(p => p.id !== id);
                 
-                // 2. approvedKakaoIds(승인된 ID 목록)에서도 해당 이름과 일치하는 항목 제거
                 let updates = {
                     'bowling_players': players
                 };
                 
-                // approvedKakaoIds 객체에서 이름이 일치하는 키 찾아서 삭제 예약
-                for (let [kakaoId, approvedName] of Object.entries(approvedKakaoIds)) {
+                // approvedKakaoIds(승인된 목록)에서 해당 이름과 일치하는 권한 제거
+                for (let [userId, approvedName] of Object.entries(approvedKakaoIds)) {
                     if (approvedName === player.name) {
-                        updates['bowling_approvedKakaoIds/' + kakaoId] = null;
+                        updates['bowling_approvedKakaoIds/' + userId] = null;
                     }
                 }
 
@@ -722,7 +702,6 @@
         } else {
             summaryText += "현재 진행 중인 팀 매칭 정보가 없습니다.";
         }
-        // 외부 브라우저 환경 호환 텍스트 공유
         if (navigator.share) {
             navigator.share({ title: 'Bowling Connection', text: summaryText.trim() }).catch(() => {});
         } else {
