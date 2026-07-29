@@ -19,6 +19,9 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
+    <!-- 카카오 공유 SDK 추가 -->
+    <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js" integrity="sha384-TiCUE00h649CAMonG018J2ujFgDKW/USORGXctmJUInwtiiXmEoPBvAA5w6ZtnzW" crossorigin="anonymous"></script>
+
     <style>
         :root {
             --primary-color: #2563eb;
@@ -312,8 +315,6 @@
                             <select id="clubStatStartMonth" onchange="renderClubStatsTable()" style="padding: 6px 10px;"></select>
                             <span>~</span>
                             <select id="clubStatEndMonth" onchange="renderClubStatsTable()" style="padding: 6px 10px;"></select>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                             <button class="success" onclick="exportClubStatsExcel()" style="padding: 6px 10px; font-size: 13px;">📥 엑셀 다운</button>
                             <button class="kakao" onclick="shareClubStatsKakao()" style="padding: 6px 10px; font-size: 13px; font-weight: bold;">💬 카카오톡 공유</button>
                         </div>
@@ -410,6 +411,11 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
+    // 카카오 SDK 초기화 (제공해주신 JavaScript 키 적용)
+    if (window.Kakao && !Kakao.isInitialized()) {
+        Kakao.init('12ba06b035aec27dddf5674111077d4d');
+    }
+
     let players = [];
     let matchResults = []; 
     let history = []; 
@@ -422,9 +428,8 @@
     let visibleHistoryCount = 3; 
     let isPlayerListExpanded = false;
     
-    // 정렬 상태 변수
     let currentSortColumn = 'avg';
-    let currentSortDirection = 'desc'; // 기본 내림차순 (에버리지 높은 순)
+    let currentSortDirection = 'desc';
     
     let teamAvgChartInstance = null;
     let attendanceChartInstance = null;
@@ -1555,7 +1560,6 @@
             };
         });
 
-        // 정렬 로직 적용
         clubStatsArray.sort((a, b) => {
             let valA = a[currentSortColumn];
             let valB = b[currentSortColumn];
@@ -1665,69 +1669,72 @@
         });
     }
 
+    // 정식 카카오톡 공유 API 활용 함수
     function shareClubStatsKakao() {
         const { clubStatsArray, startMonth, endMonth } = getClubStatsArrayData();
         if (clubStatsArray.length === 0) return alert('공유할 통계 데이터가 없습니다.');
 
-        let periodStr = (startMonth && endMonth) ? `[조회 기간: ${startMonth} ~ ${endMonth}]` : `[전체 기간 통계]`;
-        let text = `🎳 [Bowling Connection 클럽원 순위 통계]\n${periodStr}\n---------------------------\n`;
-        
-        clubStatsArray.forEach((item, idx) => {
-            text += `${idx + 1}위 | ${item.name} | 에버: ${item.avg.toFixed(1)}점 (High: ${item.high} / Low: ${item.low}) | ${item.games}게임\n`;
-        });
-        text += `---------------------------\n💡 Connection 볼링 클럽 관리 시스템`;
+        let periodStr = (startMonth && endMonth) ? `조회 기간: ${startMonth} ~ ${endMonth}` : `전체 기간 통계`;
+        let topMembers = clubStatsArray.slice(0, 5).map((item, idx) => `${idx + 1}위 ${item.name} (${item.avg.toFixed(1)}점)`).join(', ');
 
-        copyTextAndAlert(text, "클럽원 순위 및 통계 내용이 클립보드에 복사되었습니다!\n카카오톡 채팅창에 붙여넣기(Ctrl+V) 하세요.");
+        if (window.Kakao && Kakao.isInitialized()) {
+            Kakao.Share.sendDefault({
+                objectType: 'feed',
+                content: {
+                    title: '🎳 Bowling Connection 클럽원 순위 통계',
+                    description: `${periodStr}\nTOP 상위 멤버: ${topMembers}`,
+                    imageUrl: 'https://cdn-icons-png.flaticon.com/512/3394/3394997.png',
+                    link: {
+                        mobileWebUrl: window.location.href,
+                        webUrl: window.location.href,
+                    },
+                },
+                buttons: [
+                    {
+                        title: '시스템에서 확인하기',
+                        link: {
+                            mobileWebUrl: window.location.href,
+                            webUrl: window.location.href,
+                        },
+                    },
+                ],
+            });
+        } else {
+            alert('카카오 SDK가 초기화되지 않았거나 로드되지 않았습니다.');
+        }
     }
 
     function shareHistoryKakao(id) {
         const record = history.find(h => h.id === id);
         if (!record) return;
 
-        let text = `🎳 [Bowling Connection 정모 상세 기록]\n📅 날짜: ${record.date}\n---------------------------\n`;
-        record.records.forEach((r, idx) => {
-            let covers = [];
-            if(r.c1) covers.push('1G');
-            if(r.c2) covers.push('2G');
-            if(r.c3) covers.push('3G');
-            if(r.c4) covers.push('4G');
-            let coverStr = covers.length > 0 ? ` (올커버: ${covers.join(', ')})` : '';
+        let topPlayer = record.records[0] ? `${record.records[0].name} (${record.records[0].total}점)` : '';
 
-            text += `${idx + 1}위 | ${r.name} | 총점: ${r.total}점 (평균: ${r.avg})${coverStr}\n`;
-            text += `   └ 1G:${r.g1} | 2G:${r.g2} | 3G:${r.g3} | 4G:${r.g4}\n`;
-        });
-        text += `---------------------------\n💡 Connection 볼링 클럽 관리 시스템`;
-
-        copyTextAndAlert(text, "해당 정모 기록이 클립보드에 복사되었습니다!\n카카오톡 채팅창에 붙여넣기(Ctrl+V) 하세요.");
-    }
-
-    function copyTextAndAlert(text, alertMsg) {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(() => {
-                alert(alertMsg);
-            }).catch(() => {
-                fallbackCopyText(text, alertMsg);
+        if (window.Kakao && Kakao.isInitialized()) {
+            Kakao.Share.sendDefault({
+                objectType: 'feed',
+                content: {
+                    title: `🎳 정모 상세 기록 (${record.date})`,
+                    description: `참석 인원: ${record.records.length}명\n1위 🥇 ${topPlayer}`,
+                    imageUrl: 'https://cdn-icons-png.flaticon.com/512/3394/3394997.png',
+                    link: {
+                        mobileWebUrl: window.location.href,
+                        webUrl: window.location.href,
+                    },
+                },
+                buttons: [
+                    {
+                        title: '상세 점수 확인하기',
+                        link: {
+                            mobileWebUrl: window.location.href,
+                            webUrl: window.location.href,
+                        },
+                    },
+                ],
             });
         } else {
-            fallbackCopyText(text, alertMsg);
+            alert('카카오 SDK가 초기화되지 않았거나 로드되지 않았습니다.');
         }
-    }
-
-    function fallbackCopyText(text, alertMsg) {
-        const textarea = document.createElement("textarea");
-        textarea.value = text;
-        textarea.style.position = "fixed";  
-        document.body.appendChild(textarea);
-        textarea.focus();
-        textarea.select();
-        try {
-            const successful = document.execCommand('copy');
-            if (successful) alert(alertMsg);
-            else alert("복사에 실패했습니다. 직접 복사해주세요.");
-        } catch (err) {
-            alert("복사 기능을 지원하지 않는 브라우저입니다.");
-        }
-        document.body.removeChild(textarea);
     }
 
     function exportClubStatsExcel() {
