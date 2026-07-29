@@ -298,21 +298,39 @@
                     <h4 style="margin-top: 20px; color:#334155;">📈 개인 에버리지 추이</h4>
                     <div class="chart-container"><canvas id="indivAvgChart"></canvas></div>
 
-                    <!-- 클럽원 전체 에버리지 / 로우하이 / 게임수 비교 차트 영역 (기간 필터 추가) -->
+                    <!-- 클럽원 전체 에버리지 / 순위 표 영역 (기간 필터 및 탈퇴/게스트 제외 설정 추가) -->
                     <div class="game-selector-bar" style="margin-top: 40px; gap: 15px; justify-content: space-between; flex-wrap: wrap;">
                         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                            <label style="font-weight: 600;">📅 클럽원 통계 조회 기간:</label>
-                            <select id="clubStatStartMonth" onchange="renderClubStatsChart()" style="padding: 6px 10px;"></select>
+                            <label style="font-weight: 600;">📅 조회 기간:</label>
+                            <select id="clubStatStartMonth" onchange="renderClubStatsTable()" style="padding: 6px 10px;"></select>
                             <span>~</span>
-                            <select id="clubStatEndMonth" onchange="renderClubStatsChart()" style="padding: 6px 10px;"></select>
+                            <select id="clubStatEndMonth" onchange="renderClubStatsTable()" style="padding: 6px 10px;"></select>
                         </div>
-                        <div>
-                            <button class="secondary" onclick="exportClubStatsImage()" style="padding: 6px 12px; font-size: 13px;">📊 차트 이미지(PNG) 저장</button>
+                        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                            <label style="font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; color: #b91c1c;">
+                                <input type="checkbox" id="excludeGuests" onchange="renderClubStatsTable()" style="width: 16px; height: 16px; cursor: pointer;" checked> 탈퇴/게스트 회원 제외 (더미, 용병 등)
+                            </label>
+                            <button class="success" onclick="exportClubStatsExcel()" style="padding: 6px 12px; font-size: 13px;">📥 엑셀(CSV) 다운로드</button>
                         </div>
                     </div>
 
-                    <h4 style="margin-top: 20px; color:#334155;">🎳 클럽원 전체 에버리지 & 로우/하이 비교</h4>
-                    <div class="chart-container" id="clubStatsChartWrapper" style="height: 350px;"><canvas id="clubStatsChart"></canvas></div>
+                    <h4 style="margin-top: 20px; color:#334155;">🎳 클럽원 전체 순위 및 기록표 (에버리지 / 로우·하이)</h4>
+                    <div style="overflow-x: auto; margin-top: 15px;">
+                        <table class="score-table" id="clubStatsTable">
+                            <thead>
+                                <tr>
+                                    <th>순위</th>
+                                    <th>회원명</th>
+                                    <th>누적 에버리지</th>
+                                    <th>최고점 (High)</th>
+                                    <th>최저점 (Low)</th>
+                                    <th>편차 (Low-High)</th>
+                                    <th>총 게임 수</th>
+                                </tr>
+                            </thead>
+                            <tbody id="clubStatsTableBody"></tbody>
+                        </table>
+                    </div>
                 </div>
                 <div id="emptyIndivStats" class="empty-stats" style="display:none;">선수를 선택하시거나 저장된 기록이 없습니다.</div>
             </div>
@@ -380,7 +398,6 @@
     let teamAvgChartInstance = null;
     let attendanceChartInstance = null;
     let indivAvgChartInstance = null;
-    let clubStatsChartInstance = null;
 
     document.getElementById('accessPasswordInput').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') verifyAccessPassword();
@@ -1398,12 +1415,13 @@
         const ctxIndiv = document.getElementById('indivAvgChart').getContext('2d');
         indivAvgChartInstance = new Chart(ctxIndiv, { type: 'line', data: { labels: labels, datasets: [{ label: `${playerName} 에버리지`, data: indivAvgs, borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.1)', borderWidth: 2, pointBackgroundColor: '#f59e0b', pointRadius: 4, fill: true, spanGaps: true }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false } } } });
 
-        renderClubStatsChart();
+        renderClubStatsTable();
     }
 
-    function renderClubStatsChart() {
+    function renderClubStatsTable() {
         const startMonth = document.getElementById('clubStatStartMonth').value;
         const endMonth = document.getElementById('clubStatEndMonth').value;
+        const excludeGuests = document.getElementById('excludeGuests').checked;
 
         const filteredHistory = history.filter(h => {
             const mMatch = h.date.match(/^(\d{4}[-./]\d{2})/);
@@ -1420,6 +1438,11 @@
             if (!h || !h.records) return;
             h.records.forEach(r => {
                 const name = r.name;
+                if (excludeGuests) {
+                    if (name.includes('더미') || name.includes('휴식') || name.includes('용병') || name.includes('게스트') || name.includes('탈퇴')) {
+                        return;
+                    }
+                }
                 if (!statsMap[name]) {
                     statsMap[name] = { name: name, totalAvgSum: 0, avgCount: 0, high: 0, low: 999, totalGames: 0 };
                 }
@@ -1442,87 +1465,97 @@
         let clubStatsArray = Object.values(statsMap).map(item => {
             let overallAvg = item.avgCount > 0 ? (item.totalAvgSum / item.avgCount).toFixed(1) : 0;
             let lowScore = item.low === 999 ? 0 : item.low;
+            let diff = (item.high > 0 && lowScore > 0) ? (item.high - lowScore) : 0;
             return {
                 name: item.name,
                 avg: parseFloat(overallAvg),
                 high: item.high,
                 low: lowScore,
+                diff: diff,
                 games: item.totalGames
             };
         });
 
         clubStatsArray.sort((a, b) => b.avg - a.avg);
 
-        const names = clubStatsArray.map(item => item.name);
-        const avgs = clubStatsArray.map(item => item.avg);
-        const highs = clubStatsArray.map(item => item.high);
-        const lows = clubStatsArray.map(item => item.low);
-
-        const wrapperElem = document.getElementById('clubStatsChartWrapper');
-        if (clubStatsArray.length > 8) {
-            wrapperElem.style.height = `${Math.max(350, clubStatsArray.length * 40)}px`;
-        } else {
-            wrapperElem.style.height = `350px`;
+        const tbody = document.getElementById('clubStatsTableBody');
+        if (clubStatsArray.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" style="padding: 30px; color: #94a3b8;">조건에 해당하는 회원 기록이 없습니다.</td></tr>`;
+            return;
         }
 
-        if (clubStatsChartInstance) clubStatsChartInstance.destroy();
-        const ctx = document.getElementById('clubStatsChart').getContext('2d');
-        clubStatsChartInstance = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: names,
-                datasets: [
-                    {
-                        label: '최고점 (High)',
-                        data: highs,
-                        backgroundColor: 'rgba(22, 163, 74, 0.7)',
-                        borderColor: '#16a34a',
-                        borderWidth: 1
-                    },
-                    {
-                        label: '누적 에버리지',
-                        data: avgs,
-                        backgroundColor: 'rgba(37, 99, 235, 0.7)',
-                        borderColor: '#2563eb',
-                        borderWidth: 1
-                    },
-                    {
-                        label: '최저점 (Low)',
-                        data: lows,
-                        backgroundColor: 'rgba(239, 68, 68, 0.7)',
-                        borderColor: '#ef4444',
-                        borderWidth: 1
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                indexAxis: 'y',
-                plugins: {
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                let item = clubStatsArray[context.dataIndex];
-                                return `${context.dataset.label}: ${context.raw}점 (총 게임 수: ${item.games}게임)`;
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: { beginAtZero: true },
-                    y: { beginAtZero: true }
-                }
-            }
-        });
+        tbody.innerHTML = clubStatsArray.map((item, idx) => `
+            <tr>
+                <td><strong>${idx + 1}위</strong></td>
+                <td><strong>${item.name}</strong></td>
+                <td style="color: var(--primary-color); font-weight: bold;">${item.avg.toFixed(1)}점</td>
+                <td style="color: #16a34a; font-weight: bold;">${item.high}점</td>
+                <td style="color: #ef4444; font-weight: bold;">${item.low}점</td>
+                <td>${item.diff}점</td>
+                <td>${item.games}게임</td>
+            </tr>
+        `).join('');
     }
 
-    function exportClubStatsImage() {
-        if (!clubStatsChartInstance) return alert('출력할 차트가 없습니다.');
-        const imageUrl = clubStatsChartInstance.toBase64Image();
-        const link = document.createElement('a');
-        link.href = imageUrl;
-        link.download = `Connection_클럽원통계차트_${new Date().toISOString().split('T')[0]}.png`;
+    function exportClubStatsExcel() {
+        const startMonth = document.getElementById('clubStatStartMonth').value;
+        const endMonth = document.getElementById('clubStatEndMonth').value;
+        const excludeGuests = document.getElementById('excludeGuests').checked;
+
+        const filteredHistory = history.filter(h => {
+            const mMatch = h.date.match(/^(\d{4}[-./]\d{2})/);
+            if (!mMatch) return true;
+            const hMonth = mMatch[1].replace(/[-/]/g, '-');
+            if (startMonth && hMonth < startMonth) return false;
+            if (endMonth && hMonth > endMonth) return false;
+            return true;
+        });
+
+        let statsMap = {};
+        filteredHistory.forEach(h => {
+            if (!h || !h.records) return;
+            h.records.forEach(r => {
+                const name = r.name;
+                if (excludeGuests && (name.includes('더미') || name.includes('휴식') || name.includes('용병') || name.includes('게스트') || name.includes('탈퇴'))) return;
+                if (!statsMap[name]) {
+                    statsMap[name] = { name: name, totalAvgSum: 0, avgCount: 0, high: 0, low: 999, totalGames: 0 };
+                }
+                const avgVal = parseFloat(r.avg);
+                if (!isNaN(avgVal) && avgVal > 0) {
+                    statsMap[name].totalAvgSum += avgVal;
+                    statsMap[name].avgCount++;
+                }
+                [r.g1, r.g2, r.g3, r.g4].forEach(g => {
+                    let score = parseFloat(g);
+                    if (!isNaN(score) && score > 0) {
+                        if (score > statsMap[name].high) statsMap[name].high = score;
+                        if (score < statsMap[name].low) statsMap[name].low = score;
+                        statsMap[name].totalGames++;
+                    }
+                });
+            });
+        });
+
+        let clubStatsArray = Object.values(statsMap).map(item => {
+            let overallAvg = item.avgCount > 0 ? (item.totalAvgSum / item.avgCount).toFixed(1) : 0;
+            let lowScore = item.low === 999 ? 0 : item.low;
+            let diff = (item.high > 0 && lowScore > 0) ? (item.high - lowScore) : 0;
+            return { name: item.name, avg: parseFloat(overallAvg), high: item.high, low: lowScore, diff: diff, games: item.totalGames };
+        });
+        clubStatsArray.sort((a, b) => b.avg - a.avg);
+
+        if (clubStatsArray.length === 0) return alert('다운로드할 통계 데이터가 없습니다.');
+
+        let csvContent = '\uFEFF';
+        csvContent += "순위,회원명,누적에버리지,최고점(High),최저점(Low),편차(Low-High),총게임수\n";
+        clubStatsArray.forEach((item, idx) => {
+            csvContent += `${idx + 1}위,${item.name},${item.avg.toFixed(1)},${item.high},${item.low},${item.diff},${item.games}게임\n`;
+        });
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `Connection_클럽원통계순위_${new Date().toISOString().split('T')[0]}.csv`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
