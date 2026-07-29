@@ -34,7 +34,6 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px; }
         .container { max-width: 950px; margin: 0 auto; display: none; }
         
-        /* 로그인 오버레이 스타일 */
         #authOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.85); display: flex; justify-content: center; align-items: center; z-index: 9999; backdrop-filter: blur(5px); }
         .auth-card { background: white; padding: 35px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: 100%; max-width: 380px; text-align: center; }
         .auth-card h2 { margin-top: 0; color: var(--primary-color); margin-bottom: 10px; }
@@ -121,7 +120,6 @@
 </head>
 <body>
 
-    <!-- 카카오 로그인 오버레이 (비밀번호 인증 대체) -->
     <div id="authOverlay">
         <div class="auth-card">
             <h2>🎳 Connection</h2>
@@ -426,29 +424,11 @@
     let attendanceChartInstance = null;
     let indivAvgChartInstance = null;
 
-    // 카카오 로그인 실행 함수
+    // 카카오 로그인 실행 함수 (v2 authorize 표준 방식)
     function loginWithKakao() {
         if (window.Kakao && Kakao.isInitialized()) {
-            Kakao.Auth.login({
-                success: function(authObj) {
-                    Kakao.API.request({
-                        url: '/v2/user/me',
-                        success: function(res) {
-                            const nickname = res.properties ? res.properties.nickname : '회원';
-                            document.getElementById('authOverlay').style.display = 'none';
-                            document.getElementById('mainContainer').style.display = 'block';
-                            document.getElementById('userInfoDisplay').innerText = `(로그인: ${nickname}님)`;
-                            isAdmin = false;
-                            updateAuthUI();
-                        },
-                        fail: function(error) {
-                            alert('사용자 정보를 가져오지 못했습니다: ' + JSON.stringify(error));
-                        }
-                    });
-                },
-                fail: function(err) {
-                    alert('카카오 로그인에 실패했습니다: ' + JSON.stringify(err));
-                },
+            Kakao.Auth.authorize({
+                redirectUri: window.location.href.split('?')[0],
             });
         } else {
             alert('카카오 SDK가 초기화되지 않았습니다. 잠시 후 다시 시도해주세요.');
@@ -456,6 +436,17 @@
     }
 
     window.onload = function() {
+        // 카카오 로그인 완료 후 돌아온 경우 체크
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('code')) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+            document.getElementById('authOverlay').style.display = 'none';
+            document.getElementById('mainContainer').style.display = 'block';
+            document.getElementById('userInfoDisplay').innerText = `(카카오 회원 로그인 완료)`;
+            isAdmin = false;
+            updateAuthUI();
+        }
+
         db.ref('bowling_players').on('value', (snapshot) => {
             players = snapshot.val() || [];
             populateTargetMonthSelect();
