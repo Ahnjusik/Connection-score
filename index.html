@@ -1223,26 +1223,34 @@
         renderHistory(filtered);
     }
 
+    // 개별 정모 기록 내보내기 (내용에 날짜 포함: 날짜,순위,선수명,1게임,2게임,3게임,4게임,총점,에버리지,올커버횟수)
     function exportToExcel(id) {
         const record = history.find(h => h.id === id);
         if (!record) return;
-        let csvContent = '\uFEFF' + "순위,선수명,1게임,2게임,3게임,4게임,총점,에버리지,올커버횟수\n";
-        record.records.forEach((r, idx) => { csvContent += `${idx + 1}위,${r.name},${r.g1},${r.g2},${r.g3},${r.g4},${r.total},${r.avg},${r.coverCount || 0}회\n`; });
+        let csvContent = '\uFEFF' + "날짜,순위,선수명,1게임,2게임,3게임,4게임,총점,에버리지,올커버횟수\n";
+        record.records.forEach((r, idx) => { 
+            csvContent += `${record.date},${idx + 1}위,${r.name},${r.g1},${r.g2},${r.g3},${r.g4},${r.total},${r.avg},${r.coverCount || 0}회\n`; 
+        });
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `정모기록_${record.date.split(' ')[0]}.csv`;
         link.click();
     }
 
+    // 전체 DB 백업 내보내기 (내용에 날짜 포함)
     function exportAllDB() {
         if (history.length === 0) return alert('백업할 데이터가 없습니다.');
-        let csvContent = '\uFEFF' + "날짜,선수명,1게임,2게임,3게임,4게임,총점,에버리지,올커버횟수\n";
-        history.forEach(h => { h.records.forEach(r => { csvContent += `${h.date},${r.name},${r.g1},${r.g2},${r.g3},${r.g4},${r.total},${r.avg},${r.coverCount || 0}회\n`; }); });
+        let csvContent = '\uFEFF' + "날짜,순위,선수명,1게임,2게임,3게임,4게임,총점,에버리지,올커버횟수\n";
+        history.forEach(h => { 
+            h.records.forEach((r, idx) => { 
+                csvContent += `${h.date},${idx + 1}위,${r.name},${r.g1},${r.g2},${r.g3},${r.g4},${r.total},${r.avg},${r.coverCount || 0}회\n`; 
+            }); 
+        });
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `전체DB_백업.csv`;
         link.click();
     }
 
-    // CSV 파일 업로드 및 데이터 복원 함수 (컬럼 밀림 방지 로직 적용)
+    // CSV 파일 일괄 업로드 및 여러 날짜 자동 분류 반영 함수
     function importCSV(event) {
         const file = event.target.files[0];
         if (!file) return;
@@ -1256,29 +1264,34 @@
                 return;
             }
 
-            if (confirm("기존 데이터에 업로드한 기록을 병합 또는 반영하시겠습니까?")) {
+            if (confirm("기존 데이터에 업로드한 기록들을 날짜별로 자동 분류하여 병합/반영하시겠습니까?")) {
                 let importedHistoryMap = {};
                 
+                // 기존 history를 맵 형태로 준비
                 history.forEach(h => {
-                    importedHistoryMap[h.date] = h.records;
+                    importedHistoryMap[h.date] = [...h.records];
                 });
 
                 for (let i = 1; i < lines.length; i++) {
-                    const line = lines.match ? lines[i].trim() : lines[i].trim();
+                    const line = lines[i].trim();
                     if (!line) continue;
                     const cols = line.split(',');
-                    if (cols.length < 8) continue;
+                    // 새 규칙(날짜 포함 10개 컬럼) 또는 구 규칙(9개 컬럼) 대응
+                    if (cols.length < 9) continue;
 
-                    let dateStr = cols[0].trim();
-                    let name = cols[1].trim();
-                    let g1 = parseFloat(cols[2]) || 0;
-                    let g2 = parseFloat(cols[3]) || 0;
-                    let g3 = parseFloat(cols[4]) || 0;
-                    let g4 = parseFloat(cols[5]) || 0;
+                    let dateStr, name, g1, g2, g3, g4;
 
-                    // 순위 데이터나 잘못된 값이 첫 번째 열에 들어온 경우 컬럼 보정
-                    if (dateStr.includes('위') || !dateStr.includes('-')) {
-                        dateStr = cols[1].trim();
+                    if (cols[0].includes('-') || cols[0].includes('.')) {
+                        // 새로운 규칙: 첫 번째 열이 '날짜'인 경우
+                        dateStr = cols[0].trim();
+                        name = cols[2].trim();
+                        g1 = parseFloat(cols[3]) || 0;
+                        g2 = parseFloat(cols[4]) || 0;
+                        g3 = parseFloat(cols[5]) || 0;
+                        g4 = parseFloat(cols[6]) || 0;
+                    } else {
+                        // 기존 구 규칙 대응 (혹시 모를 구버전 백업 파일 호환)
+                        dateStr = cols[1].trim(); // 날짜가 두 번째에 있거나 할 때 보정
                         name = cols[2].trim();
                         g1 = parseFloat(cols[3]) || 0;
                         g2 = parseFloat(cols[4]) || 0;
@@ -1286,10 +1299,10 @@
                         g4 = parseFloat(cols[6]) || 0;
                     }
 
+                    if (!dateStr || !name) continue;
+
                     const total = g1 + g2 + g3 + g4;
                     const avg = total > 0 ? (total / 4).toFixed(1) : '0.0';
-
-                    if (!dateStr) continue;
 
                     if (!importedHistoryMap[dateStr]) {
                         importedHistoryMap[dateStr] = [];
@@ -1306,6 +1319,7 @@
                     }
                 }
 
+                // 날짜별로 그룹화된 데이터를 다시 정렬하여 history 배열로 변환
                 history = Object.keys(importedHistoryMap).map(date => {
                     let recs = importedHistoryMap[date];
                     recs.sort((a, b) => b.total - a.total);
@@ -1316,8 +1330,11 @@
                     };
                 });
 
+                // 최신 날짜순으로 정렬
+                history.sort((a, b) => new Date(b.date.split(' ')[0]) - new Date(a.date.split(' ')[0]));
+
                 syncHistoryToDB();
-                alert('CSV 데이터가 정상적으로 정렬되어 반영되었습니다!');
+                alert('여러 날짜의 정모 기록이 날짜별로 완벽하게 분류되어 반영되었습니다!');
                 event.target.value = '';
             }
         };
