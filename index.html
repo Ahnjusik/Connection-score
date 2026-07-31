@@ -440,7 +440,6 @@
     let attendanceChartInstance = null;
     let indivAvgChartInstance = null;
 
-    // 이미 명부에 있는 회원이든 아니든, 인증번호가 맞으면 항상 '신규 가입 대기' 신청을 거치도록 수정하여 관리자가 누락 없이 확인할 수 있게 함
     function loginWithRealNameInput() {
         const inputCode = prompt("클럽 인증번호를 입력해주세요:");
         if (inputCode === null) return;
@@ -458,13 +457,11 @@
         localStorage.setItem('connection_user_id', uniqueId);
         localStorage.setItem('connection_user_name', cleanName);
 
-        // 이미 승인된 ID 목록에 있는지 체크
         db.ref('bowling_approvedKakaoIds').once('value', (snap) => {
             const approved = snap.val() || {};
             const isAlreadyApproved = Object.values(approved).includes(cleanName);
             
             if (isAlreadyApproved) {
-                // 이미 승인된 이름이면 바로 통과되도록 해당 ID 매핑
                 for (let [id, appName] of Object.entries(approved)) {
                     if (appName === cleanName) {
                         localStorage.setItem('connection_user_id', id);
@@ -474,7 +471,6 @@
                 }
                 checkAuthAndRender();
             } else {
-                // 명부에 있든 없든 최초 로그인 시 무조건 관리자 승인 대기 목록에 등록하여 누락 방지
                 db.ref('bowling_pendingApprovals/' + uniqueId).set({
                     name: cleanName,
                     requestedAt: new Date().toLocaleString()
@@ -1245,78 +1241,89 @@
         const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `전체DB_백업.csv`;
         link.click();
     }
-// CSV 파일 업로드 및 데이터 복원 함수 추가
-function importCSV(event) {
-    const file = event.target.files[0];
-    if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const text = e.target.result;
-        const lines = text.split('\n');
-        if (lines.length < 2) {
-            alert('올바른 CSV 파일이 아닙니다.');
-            return;
-        }
+    // CSV 파일 업로드 및 데이터 복원 함수 (컬럼 밀림 방지 로직 적용)
+    function importCSV(event) {
+        const file = event.target.files[0];
+        if (!file) return;
 
-        if (confirm("기존 데이터에 업로드한 기록을 병합 또는 반영하시겠습니까?")) {
-            // CSV 파싱 로직 (날짜, 선수명, 게임 점수 등을 읽어 history 배열에 추가)
-            let importedHistoryMap = {};
-            
-            // 기존 history를 맵으로 변환
-            history.forEach(h => {
-                importedHistoryMap[h.date] = h.records;
-            });
-
-            // 첫 줄(헤더)을 제외하고 데이터 읽기
-            for (let i = 1; i < lines.length; i++) {
-                const line = lines[i].trim();
-                if (!line) continue;
-                const cols = line.split(',');
-                if (cols.length < 8) continue;
-
-                const dateStr = cols[0];
-                const name = cols[1];
-                const g1 = parseFloat(cols[2]) || 0;
-                const g2 = parseFloat(cols[3]) || 0;
-                const g3 = parseFloat(cols[4]) || 0;
-                const g4 = parseFloat(cols[5]) || 0;
-                const total = g1 + g2 + g3 + g4;
-                const avg = total > 0 ? (total / 4).toFixed(1) : '0.0';
-
-                if (!importedHistoryMap[dateStr]) {
-                    importedHistoryMap[dateStr] = [];
-                }
-
-                let records = importedHistoryMap[dateStr];
-                let existingRec = records.find(r => r.name === name);
-                const recordData = { name, g1, g2, g3, g4, total, avg, coverCount: 0 };
-
-                if (existingRec) {
-                    Object.assign(existingRec, recordData);
-                } else {
-                    records.push(recordData);
-                }
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const text = e.target.result;
+            const lines = text.split('\n');
+            if (lines.length < 2) {
+                alert('올바른 CSV 파일이 아닙니다.');
+                return;
             }
 
-            // history 배열 형태로 재구성
-            history = Object.keys(importedHistoryMap).map(date => {
-                let recs = importedHistoryMap[date];
-                recs.sort((a, b) => b.total - a.total);
-                return {
-                    id: new Date(date.split(' ')[0]).getTime() || Date.now(),
-                    date: date,
-                    records: recs
-                };
-            });
+            if (confirm("기존 데이터에 업로드한 기록을 병합 또는 반영하시겠습니까?")) {
+                let importedHistoryMap = {};
+                
+                history.forEach(h => {
+                    importedHistoryMap[h.date] = h.records;
+                });
 
-            syncHistoryToDB();
-            alert('CSV 데이터가 성공적으로 업로드 및 반영되었습니다!');
-            event.target.value = ''; // 파일 입력 초기화
-        }
-    };
-    reader.readAsText(file, 'utf-8');
-}
+                for (let i = 1; i < lines.length; i++) {
+                    const line = lines.match ? lines[i].trim() : lines[i].trim();
+                    if (!line) continue;
+                    const cols = line.split(',');
+                    if (cols.length < 8) continue;
+
+                    let dateStr = cols[0].trim();
+                    let name = cols[1].trim();
+                    let g1 = parseFloat(cols[2]) || 0;
+                    let g2 = parseFloat(cols[3]) || 0;
+                    let g3 = parseFloat(cols[4]) || 0;
+                    let g4 = parseFloat(cols[5]) || 0;
+
+                    // 순위 데이터나 잘못된 값이 첫 번째 열에 들어온 경우 컬럼 보정
+                    if (dateStr.includes('위') || !dateStr.includes('-')) {
+                        dateStr = cols[1].trim();
+                        name = cols[2].trim();
+                        g1 = parseFloat(cols[3]) || 0;
+                        g2 = parseFloat(cols[4]) || 0;
+                        g3 = parseFloat(cols[5]) || 0;
+                        g4 = parseFloat(cols[6]) || 0;
+                    }
+
+                    const total = g1 + g2 + g3 + g4;
+                    const avg = total > 0 ? (total / 4).toFixed(1) : '0.0';
+
+                    if (!dateStr) continue;
+
+                    if (!importedHistoryMap[dateStr]) {
+                        importedHistoryMap[dateStr] = [];
+                    }
+
+                    let records = importedHistoryMap[dateStr];
+                    let existingRec = records.find(r => r.name === name);
+                    const recordData = { name, g1, g2, g3, g4, total, avg, coverCount: 0 };
+
+                    if (existingRec) {
+                        Object.assign(existingRec, recordData);
+                    } else {
+                        records.push(recordData);
+                    }
+                }
+
+                history = Object.keys(importedHistoryMap).map(date => {
+                    let recs = importedHistoryMap[date];
+                    recs.sort((a, b) => b.total - a.total);
+                    return {
+                        id: new Date(date.split(' ')[0]).getTime() || Date.now(),
+                        date: date,
+                        records: recs
+                    };
+                });
+
+                syncHistoryToDB();
+                alert('CSV 데이터가 정상적으로 정렬되어 반영되었습니다!');
+                event.target.value = '';
+            }
+        };
+        reader.readAsText(file, 'utf-8');
+    }
+
     function deleteHistory(id) {
         if (confirm('삭제하시겠습니까?')) { history = history.filter(h => h.id !== id); syncHistoryToDB(); }
     }
