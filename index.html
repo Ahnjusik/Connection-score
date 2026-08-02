@@ -728,7 +728,6 @@
         }
     }
 
-    // 1G~4G 세부 점수가 포함된 텍스트 카카오톡 공유
     function shareHistoryRecordToKakao(id) {
         const recordObj = history.find(h => h.id === id);
         if (!recordObj) return;
@@ -745,22 +744,22 @@
         }
     }
 
-    // [핵심 추가 기능] 정모 결과표 전체를 이미지(사진)로 만들어 바로 카카오톡/공유창으로 띄우기
+    // CORS 충돌(Tainted canvas)을 방지하여 이미지 공유 기능 완벽 개선
     async function shareHistoryRecordAsImage(id) {
         const boxElem = document.getElementById(`history_box_${id}`);
         if (!boxElem) return alert('공유할 요소를 찾을 수 없습니다.');
 
         try {
-            // 공유 버튼 일시 숨기기 (이미지 깔끔하게 나오도록)
             const btnGroup = boxElem.querySelector('.history-btn-group');
             if (btnGroup) btnGroup.style.display = 'none';
 
-            const canvas = await html2canvas(boxElem, { scale: 2, backgroundColor: '#ffffff' });
+            // useCORS 설정과 allowTaint 추가로 외부 리소스/캔버스 충돌 방지
+            const canvas = await html2canvas(boxElem, { scale: 2, backgroundColor: '#ffffff', useCORS: true, allowTaint: true });
             
             if (btnGroup) btnGroup.style.display = 'flex';
 
             canvas.toBlob(async (blob) => {
-                const file = new File([blob], `정모결과_${id}.png`, { type: 'png' });
+                const file = new File([blob], `정모결과_${id}.png`, { type: 'image/png' });
                 const filesArray = [file];
 
                 if (navigator.canShare && navigator.canShare({ files: filesArray })) {
@@ -774,14 +773,13 @@
                         if (err.name !== 'AbortError') alert('공유 중 오류가 발생했습니다.');
                     }
                 } else {
-                    // 공유 API를 지원하지 않는 브라우저일 경우 바로 다운로드
                     const link = document.createElement('a');
                     link.download = `정모결과_${id}.png`;
-                    link.href = canvas.toDataURL();
+                    link.href = canvas.toDataURL('image/png');
                     link.click();
                     alert('사진이 갤러리(다운로드)에 저장되었습니다!');
                 }
-            });
+            }, 'image/png');
         } catch (err) {
             const btnGroup = boxElem.querySelector('.history-btn-group');
             if (btnGroup) btnGroup.style.display = 'flex';
