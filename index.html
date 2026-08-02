@@ -12,6 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
@@ -727,19 +728,64 @@
         }
     }
 
+    // 1G~4G 세부 점수가 포함된 텍스트 카카오톡 공유
     function shareHistoryRecordToKakao(id) {
         const recordObj = history.find(h => h.id === id);
         if (!recordObj) return;
 
-        let text = `🎳 [정모 결과]\n📅 ${recordObj.date}\n\n`;
+        let text = `🎳 [Bowling Connection 정모 결과]\n📅 날짜: ${recordObj.date}\n\n`;
         recordObj.records.forEach((r, idx) => {
-            text += `${idx + 1}위 ${r.name} | 총점: ${r.total}점 (에버: ${r.avg})\n`;
+            text += `${idx + 1}위 ${r.name} | 1G:${r.g1} 2G:${r.g2} 3G:${r.g3} 4G:${r.g4} | 총점:${r.total} (에버:${r.avg})\n`;
         });
 
         if (navigator.share) {
             navigator.share({ title: '정모 결과', text: text.trim() }).catch(() => {});
         } else {
-            navigator.clipboard.writeText(text.trim()).then(() => alert("복사되었습니다!"));
+            navigator.clipboard.writeText(text.trim()).then(() => alert("정모 결과(1~4게임 세부점수)가 복사되었습니다!"));
+        }
+    }
+
+    // [핵심 추가 기능] 정모 결과표 전체를 이미지(사진)로 만들어 바로 카카오톡/공유창으로 띄우기
+    async function shareHistoryRecordAsImage(id) {
+        const boxElem = document.getElementById(`history_box_${id}`);
+        if (!boxElem) return alert('공유할 요소를 찾을 수 없습니다.');
+
+        try {
+            // 공유 버튼 일시 숨기기 (이미지 깔끔하게 나오도록)
+            const btnGroup = boxElem.querySelector('.history-btn-group');
+            if (btnGroup) btnGroup.style.display = 'none';
+
+            const canvas = await html2canvas(boxElem, { scale: 2, backgroundColor: '#ffffff' });
+            
+            if (btnGroup) btnGroup.style.display = 'flex';
+
+            canvas.toBlob(async (blob) => {
+                const file = new File([blob], `정모결과_${id}.png`, { type: 'png' });
+                const filesArray = [file];
+
+                if (navigator.canShare && navigator.canShare({ files: filesArray })) {
+                    try {
+                        await navigator.share({
+                            files: filesArray,
+                            title: '정모 결과표',
+                            text: '🎳 Bowling Connection 정모 결과표입니다.'
+                        });
+                    } catch (err) {
+                        if (err.name !== 'AbortError') alert('공유 중 오류가 발생했습니다.');
+                    }
+                } else {
+                    // 공유 API를 지원하지 않는 브라우저일 경우 바로 다운로드
+                    const link = document.createElement('a');
+                    link.download = `정모결과_${id}.png`;
+                    link.href = canvas.toDataURL();
+                    link.click();
+                    alert('사진이 갤러리(다운로드)에 저장되었습니다!');
+                }
+            });
+        } catch (err) {
+            const btnGroup = boxElem.querySelector('.history-btn-group');
+            if (btnGroup) btnGroup.style.display = 'flex';
+            alert('이미지 생성에 실패했습니다.');
         }
     }
 
@@ -1223,18 +1269,20 @@
         
         const selectedMonth = document.getElementById('historyFilterMonthSelect').value;
         const keywordInput = document.getElementById('searchInput').value.toLowerCase().trim();
+        const nameKeywords = keywordInput.replace(/[./]/g, '-').split(/\s+/).filter(k => k);
         const isFiltering = (selectedMonth !== 'all' || keywordInput !== '');
 
         loadMoreContainer.style.display = (!isFiltering && dataToRender.length > visibleHistoryCount) ? 'block' : 'none';
 
         container.innerHTML = (isFiltering ? dataToRender : dataToRender.slice(0, visibleHistoryCount)).map(h => {
             return `
-            <div class="history-box">
+            <div class="history-box" id="history_box_${h.id}">
                 <div style="display: flex; justify-content: space-between; border-bottom: 2px solid var(--primary-color); padding-bottom: 4px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; gap: 6px;">
-                    <strong style="font-size: 14px; color: var(--primary-color);">${h.date}</strong>
-                    <div style="display: flex; gap: 4px;">
-                        <button class="kakao-share" onclick="shareHistoryRecordToKakao(${h.id})" style="padding: 3px 6px; font-size: 11px;">공유</button>
-                        <button class="success" onclick="exportToExcel(${h.id})" style="padding: 3px 6px; font-size: 11px;">엑셀</button>
+                    <strong style="font-size: 14px; color: var(--primary-color);">📅 ${h.date}</strong>
+                    <div class="history-btn-group" style="display: flex; gap: 4px;">
+                        <button class="success" onclick="shareHistoryRecordAsImage(${h.id})" style="padding: 3px 6px; font-size: 11px; background-color: #16a34a;">📷 이미지 공유</button>
+                        <button class="kakao-share" onclick="shareHistoryRecordToKakao(${h.id})" style="padding: 3px 6px; font-size: 11px;">💬 텍스트공유</button>
+                        <button class="success" onclick="exportToExcel(${h.id})" style="padding: 3px 6px; font-size: 11px;">📥 엑셀</button>
                         <button class="delete-btn" onclick="checkPasswordAndExecute(() => deleteHistory(${h.id}))" style="padding: 3px 6px; font-size: 11px;">삭제</button>
                     </div>
                 </div>
