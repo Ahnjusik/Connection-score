@@ -344,7 +344,7 @@
                         </div>
                     </div>
 
-                    <h4 style="margin-top: 20px; color:#334155;">🎳 클럽원 전체 순위 및 기록표 (에버리지 / 로우·하이)</h4>
+                    <h4 style="margin-top: 20px; color:#334155;">🎳 클럽원 전체 순위 및 기록표 (เอ버리지 / 로우·하이)</h4>
                     <div style="font-size: 12px; color: #64748b; margin-bottom: 6px;">💡 표의 항목 제목(순위, 회원명, 에버리지 등)을 클릭하면 오름차순/내림차순 정렬이 가능합니다.</div>
                     <div style="overflow-x: auto;">
                         <table class="score-table" id="clubStatsTable">
@@ -424,7 +424,7 @@
         });
     }
 
-    const firebaseConfig = {
+    const _fbConfig = {
         apiKey: "AIzaSyCJvWHR4L7LtB1OneHBwhuSu_YwenIwq-k",
         authDomain: "connection-score-management.firebaseapp.com",
         databaseURL: "https://connection-score-management-default-rtdb.asia-southeast1.firebasedatabase.app",
@@ -435,14 +435,14 @@
         measurementId: "G-6DSMWPKPEF"
     };
 
-    firebase.initializeApp(firebaseConfig);
+    firebase.initializeApp(_fbConfig);
     const db = firebase.database();
 
     let players = [];
     let matchResults = []; 
     let history = []; 
     let liveScores = {}; 
-    let publishedTeamSettings = { mode: 'current', monthFilter: 'all' }; // 최초 확정된 팀 편성 설정
+    let publishedTeamSettings = { mode: 'current', monthFilter: 'all' }; 
     let hiddenStatMembers = {}; 
     let pendingApprovals = {};
     let approvedKakaoIds = {};
@@ -1060,7 +1060,6 @@
         Array.from(months).sort((a,b)=>b.localeCompare(a)).forEach(m => select.appendChild(new Option(m + '월', m)));
     }
 
-    // 관리자가 최초 팀 편성 확정 및 공유 버튼 클릭 시
     function confirmAndPublishTeams() {
         checkPasswordAndExecute(() => {
             const mode = document.querySelector('input[name="teamMode"]:checked').value;
@@ -1083,13 +1082,11 @@
         document.getElementById('publishedModeDisplay').innerText = text;
     }
 
-    // 최초 팀 편성을 기준으로 팀을 나누고, 상단 카드 및 1게임 입력란 옆 팀 번호 배지를 정확히 매칭하는 핵심 함수
     function computeAndRenderTeams() {
         const teamCount = parseInt(document.getElementById('teamCount').value) || 4;
         const mode = publishedTeamSettings.mode || 'current';
         const monthFilter = publishedTeamSettings.monthFilter || 'all';
 
-        // 각 선수의 기준 정렬 점수 계산 (당일 초기 에버리지 또는 누적 에버리지)
         const getPlayerBaseSortingScore = (p) => {
             let score = p.score;
             if (mode === 'history') {
@@ -1114,7 +1111,6 @@
             let tIdx = Math.floor(index / teamCount) % 2 === 0 ? index % teamCount : teamCount - 1 - (index % teamCount);
             if (Math.floor(index / teamCount) >= 1) { teams.sort((a, b) => a.totalScore - b.totalScore); tIdx = teams.indexOf(teams[0]); }
             
-            // 1게임 실시간 점수 가져오기
             let pLive = liveScores[player.id] || {};
             let dispScore = parseFloat(pLive.g1) || 0;
 
@@ -1126,7 +1122,6 @@
 
         const uniqueLiveScores = [...new Set(teams.map(t => t.liveSumScore))].sort((a, b) => b - a);
 
-        // 1. 상단 팀 카드 렌더링 (1게임 점수가 입력되면 liveSumScore 및 순위가 실시간 반영됨)
         document.getElementById('teamsContainer').innerHTML = teams.map((team, idx) => {
             const avg = team.members.length > 0 ? (team.totalScore / team.members.length).toFixed(1) : 0;
             let rankClass = '';
@@ -1152,7 +1147,6 @@
                 </div>`;
         }).join('');
 
-        // 2. 1게임 입력란 옆에 정확한 팀 번호 배지 매핑
         matchResults.forEach(p => {
             let badgeElem = document.getElementById(`team_badge_g1_${p.id}`);
             if (badgeElem) {
