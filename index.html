@@ -211,7 +211,7 @@
                 </div>
             </div>
 
-            <!-- 관리자용 최초 팀 편성 조작 컨트롤러 -->
+            <!-- 관리자용 최초 팀 편성 조작 컨트롤러 (게임 중에도 관리자 모드 시 항상 노출) -->
             <div class="team-mode-bar" id="adminTeamControlPanel" style="display: none; background: #eff6ff; border: 1px solid #bfdbfe;">
                 <div style="font-weight: bold; color: #1e40af; width: 100%;">🛠️ [관리자] 최초 팀 편성 설정</div>
                 <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%;">
@@ -363,7 +363,7 @@
                     <select id="historyFilterMonthSelect" onchange="filterHistory()" style="padding: 6px; font-size: 12px; font-weight: 600; color: var(--primary-color);">
                         <option value="all">전체 월별</option>
                     </select>
-                    <input type="text" id="searchInput" class="search-bar" placeholder="검색" oninput="filterHistory()">
+                    <input type="text" id="searchInput" class="search-bar" placeholder="예: 안주식 김연희" oninput="filterHistory()">
                 </div>
             </div>
             <div id="historyContainer" style="margin-top: 12px;"></div>
@@ -744,7 +744,6 @@
         }
     }
 
-    // CORS 충돌(Tainted canvas)을 방지하여 이미지 공유 기능 완벽 개선
     async function shareHistoryRecordAsImage(id) {
         const boxElem = document.getElementById(`history_box_${id}`);
         if (!boxElem) return alert('공유할 요소를 찾을 수 없습니다.');
@@ -753,7 +752,6 @@
             const btnGroup = boxElem.querySelector('.history-btn-group');
             if (btnGroup) btnGroup.style.display = 'none';
 
-            // useCORS 설정과 allowTaint 추가로 외부 리소스/캔버스 충돌 방지
             const canvas = await html2canvas(boxElem, { scale: 2, backgroundColor: '#ffffff', useCORS: true, allowTaint: true });
             
             if (btnGroup) btnGroup.style.display = 'flex';
@@ -1263,16 +1261,22 @@
     function renderHistory(dataToRender = history) {
         const container = document.getElementById('historyContainer');
         const loadMoreContainer = document.getElementById('loadMoreContainer');
-        if (!dataToRender || dataToRender.length === 0) { loadMoreContainer.style.display = 'none'; return container.innerHTML = `<div class="empty-stats">기록이 없습니다.</div>`; }
+        if (!dataToRender || dataToRender.length === 0) { loadMoreContainer.style.display = 'none'; return container.innerHTML = `<div class="empty-stats">검색 결과가 없습니다.</div>`; }
         
         const selectedMonth = document.getElementById('historyFilterMonthSelect').value;
         const keywordInput = document.getElementById('searchInput').value.toLowerCase().trim();
-        const nameKeywords = keywordInput.replace(/[./]/g, '-').split(/\s+/).filter(k => k);
+        const searchTokens = keywordInput.replace(/[./]/g, '-').split(/\s+/).filter(k => k);
         const isFiltering = (selectedMonth !== 'all' || keywordInput !== '');
 
         loadMoreContainer.style.display = (!isFiltering && dataToRender.length > visibleHistoryCount) ? 'block' : 'none';
 
         container.innerHTML = (isFiltering ? dataToRender : dataToRender.slice(0, visibleHistoryCount)).map(h => {
+            let filteredRecords = h.records;
+            if (searchTokens.length > 0) {
+                filteredRecords = h.records.filter(r => searchTokens.some(token => r.name.toLowerCase().includes(token) || h.date.toLowerCase().includes(token)));
+            }
+            if (filteredRecords.length === 0) return '';
+
             return `
             <div class="history-box" id="history_box_${h.id}">
                 <div style="display: flex; justify-content: space-between; border-bottom: 2px solid var(--primary-color); padding-bottom: 4px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; gap: 6px;">
@@ -1287,7 +1291,7 @@
                 <div style="overflow-x: auto;">
                     <table class="score-table" style="background: white;">
                         <thead><tr><th>순위</th><th>이름</th><th>1G</th><th>2G</th><th>3G</th><th>4G</th><th>총점</th><th>에버</th></tr></thead>
-                        <tbody>${h.records.map((r, i) => `<tr><td>${i+1}위</td><td>${r.name}</td><td>${r.g1}</td><td>${r.g2}</td><td>${r.g3}</td><td>${r.g4}</td><td><strong>${r.total}</strong></td><td>${r.avg}</td></tr>`).join('')}</tbody>
+                        <tbody>${filteredRecords.map((r, i) => `<tr><td>-</td><td><strong>${r.name}</strong></td><td>${r.g1}</td><td>${r.g2}</td><td>${r.g3}</td><td>${r.g4}</td><td><strong>${r.total}</strong></td><td>${r.avg}</td></tr>`).join('')}</tbody>
                     </table>
                 </div>
             </div>`;
@@ -1299,14 +1303,18 @@
     function filterHistory() {
         const selectedMonth = document.getElementById('historyFilterMonthSelect').value;
         const keywordInput = document.getElementById('searchInput').value.toLowerCase().trim();
-        const nameKeywords = keywordInput.replace(/[./]/g, '-').split(/\s+/).filter(k => k);
+        const searchTokens = keywordInput.replace(/[./]/g, '-').split(/\s+/).filter(k => k);
 
         let filtered = history.filter(h => {
             const hDateClean = h.date.replace(/[-/]/g, '-');
             const matchMonth = (selectedMonth === 'all' || hDateClean.startsWith(selectedMonth));
             if (!matchMonth) return false;
-            if (nameKeywords.length === 0) return true;
-            return nameKeywords.some(nk => h.date.toLowerCase().includes(nk) || h.records.some(r => r.name.toLowerCase().includes(nk)));
+            if (searchTokens.length === 0) return true;
+
+            return searchTokens.some(token => 
+                h.date.toLowerCase().includes(token) || 
+                h.records.some(r => r.name.toLowerCase().includes(token))
+            );
         });
 
         renderHistory(filtered);
