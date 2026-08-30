@@ -1097,12 +1097,6 @@
                 });
                 if (cnt > 0) score = parseFloat((tot / cnt).toFixed(1));
             }
-            
-            let pLive = liveScores[p.id] || {};
-            let liveG1 = parseFloat(pLive.g1);
-            if (!isNaN(liveG1) && liveG1 > 0) {
-                score = (score + liveG1) / 2;
-            }
             return score;
         };
 
@@ -1142,7 +1136,7 @@
                         <div class="team-member">
                             <span>${m.name}</span>
                             <span style="display: flex; gap: 6px; align-items: center;">
-                                <span style="font-size: 11px; color: #64748b;">(기준:${m.sortingScore.toFixed(1)})</span>
+                                <span style="font-size: 11px; color: #64748b;">(기준:${m.sortingScore})</span>
                                 <strong style="color: var(--primary-color); font-size: 13px;">${m.displayGameScore > 0 ? m.displayGameScore + '점' : '-'}</strong>
                             </span>
                         </div>`).join('')}
