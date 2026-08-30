@@ -1,382 +1,72 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>🎳 Connection 볼링 클럽 점수관리 System</title>
-    
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#2563eb">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    function computeAndRenderTeams() {
+        const teamCount = parseInt(document.getElementById('teamCount').value) || 4;
+        const mode = publishedTeamSettings.mode || 'current';
+        const monthFilter = publishedTeamSettings.monthFilter || 'all';
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-
-    <style>
-        :root {
-            --primary-color: #2563eb;
-            --bg-color: #f8fafc;
-            --card-bg: #ffffff;
-            --border-color: #e2e8f0;
-            --text-color: #1e293b;
-        }
-
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 10px; -webkit-text-size-adjust: 100%; }
-        .container { max-width: 950px; margin: 0 auto; display: none; padding-bottom: 40px; }
-        
-        #authOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.85); display: flex; justify-content: center; align-items: center; z-index: 9999; backdrop-filter: blur(5px); padding: 15px; box-sizing: border-box; }
-        .auth-card { background: white; padding: 25px 20px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: 100%; max-width: 380px; text-align: center; }
-        .auth-card h2 { margin-top: 0; color: var(--primary-color); margin-bottom: 10px; font-size: 22px; }
-        .auth-card p { font-size: 13px; color: #64748b; margin-bottom: 20px; line-height: 1.5; }
-        
-        .kakao-btn { width: 100%; padding: 12px; font-size: 15px; background-color: #fee500; color: #191919; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
-
-        .header-box { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 15px; flex-wrap: wrap; }
-        .club-logo { width: 55px; height: 55px; object-fit: contain; border-radius: 50%; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); background: white; padding: 3px; border: 2px solid var(--border-color); }
-        h1 { color: var(--primary-color); margin: 0; font-size: 20px; text-align: center; }
-
-        .nav-tabs { display: flex; gap: 5px; margin-bottom: 15px; border-bottom: 2px solid var(--border-color); overflow-x: auto; }
-        .nav-tab-btn { background: none; border: none; padding: 10px 14px; font-size: 14px; font-weight: 600; color: #64748b; cursor: pointer; border-radius: 8px 8px 0 0; white-space: nowrap; transition: all 0.2s; border-bottom: 3px solid transparent; }
-        .nav-tab-btn.active { color: var(--primary-color); border-bottom: 3px solid var(--primary-color); background: #eff6ff; }
-        .tab-content { display: none; animation: fadeIn 0.3s ease-in-out; }
-        .tab-content.active { display: block; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-
-        .card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); margin-bottom: 15px; }
-        .input-group { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-        input, select { padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; outline: none; width: 100%; box-sizing: border-box; }
-        input:focus, select:focus { border-color: var(--primary-color); }
-        button { background-color: var(--primary-color); color: white; border: none; padding: 10px 14px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
-        button.secondary { background-color: #64748b; }
-        button.success { background-color: #16a34a; }
-        button.danger { background-color: #ef4444; }
-        button.kakao-share { background-color: #fee500; color: #191919; font-weight: 600; }
-
-        .btn-container { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
-        .list-header { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color); font-weight: 600; font-size: 13px; color: #64748b; flex-wrap: wrap; gap: 6px; }
-        .player-list { max-height: 200px; overflow-y: auto; margin-top: 6px; }
-        .player-list.expanded { max-height: none; overflow-y: visible; }
-        .player-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #f1f5f9; border-radius: 6px; margin-bottom: 5px; font-size: 13px; }
-        .player-info { display: flex; align-items: center; gap: 6px; }
-        .player-info input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
-        .edit-score-input { width: 50px; padding: 3px; font-size: 13px; text-align: center; border: 1px solid #cbd5e1; border-radius: 4px; }
-        .delete-btn { background: #ef4444; color: white; border: none; padding: 3px 6px; border-radius: 4px; cursor: pointer; font-size: 11px; }
-
-        .teams-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 15px; }
-        .team-box { background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 10px; padding: 12px; }
-        .team-box.rank-1 { border-color: #2563eb !important; background-color: #eff6ff; }
-        .team-box.rank-2 { border-color: #16a34a !important; background-color: #f0fdf4; }
-        .team-box.rank-3 { border-color: #d97706 !important; background-color: #fffbeb; }
-        .team-box h3 { margin-top: 0; font-size: 15px; border-bottom: 2px solid var(--primary-color); padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
-        .team-stats { font-size: 12px; color: #64748b; margin-bottom: 8px; }
-        .team-member { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed var(--border-color); font-size: 13px; align-items: center; }
-
-        .score-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; white-space: nowrap; }
-        .score-table th, .score-table td { border: 1px solid var(--border-color); padding: 6px 4px; text-align: center; }
-        .score-table th { background-color: #f1f5f9; color: #475569; }
-        .score-input { width: 45px; padding: 4px; text-align: center; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; }
-        
-        .history-box { background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
-        .team-mode-bar { display: flex; align-items: center; gap: 10px; background: #e2e8f0; padding: 10px; border-radius: 8px; margin-bottom: 10px; flex-wrap: wrap; font-size: 13px; }
-        .game-selector-bar { display: flex; align-items: center; gap: 8px; background: #f1f5f9; padding: 10px; border-radius: 8px; margin-bottom: 12px; flex-wrap: wrap; font-size: 13px; }
-        .search-bar { width: 100%; max-width: 140px; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px; }
-        
-        .chart-container { position: relative; height: 240px; width: 100%; margin-top: 15px; }
-        .stat-summary-box { display: flex; gap: 8px; background: #f1f5f9; padding: 10px; border-radius: 8px; margin-top: 10px; margin-bottom: 15px; justify-content: space-around; flex-wrap: wrap; }
-        .stat-item { text-align: center; min-width: 85px; }
-        .stat-value { font-size: 18px; font-weight: bold; color: var(--primary-color); }
-        .stat-label { font-size: 11px; color: #64748b; margin-top: 2px; }
-        
-        .empty-stats { text-align: center; padding: 30px; color: #94a3b8; background: #f8fafc; border-radius: 8px; font-size: 13px; }
-        #loadingMsg { text-align: center; color: var(--primary-color); font-weight: bold; padding: 8px; background: #e0f2fe; border-radius: 8px; margin-bottom: 12px; font-size: 13px; }
-        .auto-badge, .dummy-badge, .cover-badge, .team-badge { font-size: 10px; padding: 1px 4px; border-radius: 4px; font-weight: 600; }
-        .auto-badge { background: #dbeafe; color: #1e40af; }
-        .dummy-badge { background: #fee2e2; color: #991b1b; }
-        .cover-badge { background: #fef08a; color: #854d0e; }
-        .team-badge { background: #e2e8f0; color: #334155; }
-        
-        .auth-bar { display: flex; justify-content: space-between; align-items: center; background: #e2e8f0; padding: 6px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 12px; flex-wrap: wrap; gap: 6px; }
-        .notice-banner { text-align: center; padding: 20px; background: #f1f5f9; border-radius: 10px; color: #475569; font-size: 14px; font-weight: 600; }
-        
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box; }
-        .modal-content { background: white; padding: 20px; border-radius: 12px; width: 100%; max-width: 450px; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 12px; }
-        .modal-header h3 { margin: 0; color: var(--primary-color); font-size: 16px; }
-    </style>
-</head>
-<body>
-
-    <div id="authOverlay">
-        <div class="auth-card" id="loginCardView">
-            <h2>🎳 Connection</h2>
-            <p>클럽 회원 전용 시스템입니다.<br>본인의 이름과 클럽 인증번호를 입력해 주세요.</p>
-            <button class="kakao-btn" onclick="loginWithRealNameInput()">
-                <svg width="16" height="16" viewBox="0 0 18 18" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M9 1C4.58172 1 1 3.79086 1 7.21543C1 9.42055 2.45492 11.352 4.67389 12.4571L3.79159 15.7287C3.69992 16.068 4.08588 16.3263 4.37257 16.1264L8.47225 13.3328C8.64718 13.3444 8.82315 13.3503 10 13.3503C14.4183 13.3503 18 10.5594 18 7.13486C18 3.71029 14.4183 1 10 1Z" fill="#191919"/></svg>
-                회원 이름으로 로그인 / 가입 신청
-            </button>
-            <button onclick="loginAsAdminPrompt()" style="margin-top: 10px; width: 100%; background: #475569; font-size: 13px; padding: 10px; border-radius: 8px; border:none; color:white; font-weight:600; cursor:pointer;">🔑 관리자 직접 로그인 (비밀번호)</button>
-        </div>
-
-        <div class="auth-card" id="pendingCardView" style="display: none;">
-            <h2>⏳ 가입 승인 대기 중</h2>
-            <p><strong id="pendingNameDisplay" style="color:var(--primary-color);"></strong>님 환영합니다!<br><br>클럽 관리자의 가입 승인을 기다리고 있습니다. 승인이 완료되면 자동으로 입장이 가능해집니다.</p>
-            <button class="secondary" onclick="logoutSession()" style="width: 100%; margin-top: 8px; padding: 10px; font-size: 13px;">다른 이름으로 변경</button>
-            <button onclick="loginAsAdminPrompt()" style="margin-top: 10px; width: 100%; background: #475569; font-size: 13px; padding: 10px; border-radius: 8px; border:none; color:white; font-weight:600; cursor:pointer;">🔑 관리자 직접 로그인 (비밀번호)</button>
-        </div>
-    </div>
-
-<div class="container" id="mainContainer">
-    <div class="header-box">
-        <img src="logo.png" alt="Connection Logo" class="club-logo" onerror="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';">
-        <h1>Bowling Connection 점수관리 System</h1>
-    </div>
-
-    <div id="loadingMsg">📡 데이터베이스와 연결 중입니다...</div>
-
-    <div class="auth-bar" id="authBar">
-        <span>모드: <strong id="modeIndicator" style="color: var(--primary-color);">일반 회원</strong> <span id="userInfoDisplay" style="font-size: 11px; color: #64748b;"></span></span>
-        <div style="display: flex; gap: 5px;">
-            <button id="authSwitchBtn" onclick="toggleAuthMode()" style="padding: 4px 10px; font-size: 11px;">관리자 전환</button>
-            <button onclick="logoutSession()" class="danger" style="padding: 4px 8px; font-size: 11px;">로그아웃</button>
-        </div>
-    </div>
-
-    <div class="nav-tabs">
-        <button class="nav-tab-btn active" onclick="switchTab('main-tab', this)">🎳 현재 게임</button>
-        <button class="nav-tab-btn" onclick="switchTab('history-tab', this)">📈 역대 기록 & 통계</button>
-    </div>
-
-    <div id="main-tab" class="tab-content active">
-        <div class="card" id="adminControlCard" style="display: none;">
-            <h3 style="font-size: 15px; margin-top:0;">1. 회원명부 및 가입 승인 관리</h3>
+        // 각 선수의 기준 점수에 현재 입력된 1게임 점수(또는 실시간 점수)를 동적으로 반영
+        const getPlayerBaseSortingScore = (p) => {
+            let score = p.score;
+            if (mode === 'history') {
+                let tot = 0, cnt = 0;
+                history.forEach(h => {
+                    if (monthFilter !== 'all' && !h.date.replace(/[-/]/g, '-').startsWith(monthFilter)) return;
+                    let rec = h.records.find(r => r.name === p.name);
+                    if (rec && parseFloat(rec.avg) > 0) { tot += parseFloat(rec.avg); cnt++; }
+                });
+                if (cnt > 0) score = parseFloat((tot / cnt).toFixed(1));
+            }
             
-            <div id="pendingApprovalSection" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; margin-bottom: 15px; display: none;">
-                <h4 style="margin-top: 0; color: #1e40af; font-size: 14px;">📥 신규 가입 대기 회원</h4>
-                <div id="pendingApprovalList" style="display: flex; flex-direction: column; gap: 6px;"></div>
-            </div>
+            // 실시간 입력된 1게임 점수가 있다면 이를 즉시 기준 점수에 합산 혹은 반영하여 팀 재편성에 활용
+            let pLive = liveScores[p.id] || {};
+            let liveG1 = parseFloat(pLive.g1);
+            if (!isNaN(liveG1) && liveG1 > 0) {
+                // 예: 당일 점수 기준일 때 실시간 입력된 1게임 점수를 반영하고 싶다면 아래와 같이 조율 가능합니다.
+                score = (score + liveG1) / 2; // 또는 liveG1 자체를 가중 반영
+            }
+            return score;
+        };
 
-            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; font-size: 13px;">
-                <div>
-                    <label for="teamCount" style="font-weight: 600; margin-right: 5px;">팀 수:</label>
-                    <select id="teamCount" style="width: 70px; padding: 6px;" onchange="saveSettings()">
-                        <option value="2">2개</option><option value="3">3개</option><option value="4" selected>4개</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="targetMonthSelect" style="font-weight: 600; margin-right: 5px;">📅 기준 월:</label>
-                    <select id="targetMonthSelect" onchange="refreshPlayerScoresByMonth()" style="padding: 6px; font-weight: 600; color: var(--primary-color);">
-                        <option value="recent">전체 에버리지</option>
-                    </select>
-                </div>
-            </div>
+        let evalPlayers = matchResults.map(p => ({ ...p, sortingScore: getPlayerBaseSortingScore(p) }));
+        evalPlayers.sort((a, b) => b.sortingScore - a.sortingScore);
 
-            <div class="input-group">
-                <input type="text" id="playerName" lang="ko" placeholder="회원 이름" style="ime-mode: active;" />
-                <input type="number" id="playerScore" placeholder="수동 점수" />
-                <button onclick="addPlayer()" style="padding: 8px;">추가</button>
-            </div>
+        let teams = Array.from({ length: teamCount }, () => ({ memberIds: new Set(), members: [], totalScore: 0, liveSumScore: 0 }));
+        evalPlayers.forEach((player, index) => {
+            let tIdx = Math.floor(index / teamCount) % 2 === 0 ? index % teamCount : teamCount - 1 - (index % teamCount);
+            if (Math.floor(index / teamCount) >= 1) { teams.sort((a, b) => a.totalScore - b.totalScore); tIdx = teams.indexOf(teams[0]); }
+            
+            let pLive = liveScores[player.id] || {};
+            let dispScore = parseFloat(pLive.g1) || 0;
 
-            <div class="list-header">
-                <span>참석 회원 체크</span>
-                <div style="display: flex; gap: 4px; align-items: center;">
-                    <button type="button" id="expandListBtn" onclick="toggleExpandPlayerList()" style="padding: 3px 6px; font-size: 11px; background: #0284c7;">펼치기</button>
-                    <button type="button" onclick="toggleAll(true)" style="padding: 3px 6px; font-size: 11px; background: #64748b;">전체선택</button>
-                    <button type="button" onclick="toggleAll(false)" style="padding: 3px 6px; font-size: 11px; background: #64748b;">해제</button>
-                </div>
-            </div>
-            <div class="player-list" id="playerListContainer"></div>
-            <div class="btn-container" style="margin-top: 15px;">
-                <button onclick="initMatch()" style="flex: 2; padding: 10px;">🚀 정모 시작 (화면 오픈)</button>
-                <button onclick="resetData()" class="secondary" style="flex: 1; padding: 10px;">초기화</button>
-            </div>
-        </div>
+            teams[tIdx].memberIds.add(player.id);
+            teams[tIdx].members.push({ ...player, displayGameScore: dispScore });
+            teams[tIdx].totalScore += player.sortingScore;
+            teams[tIdx].liveSumScore += dispScore;
+        });
 
-        <div class="card" id="waitingNoticeCard">
-            <div class="notice-banner">
-                ⏳ 현재 진행 중인 정모가 없습니다.<br>
-                <span style="font-size: 12px; color: #64748b; font-weight: normal; margin-top: 6px; display: block;">관리자가 정모를 시작하면 입력 창이 활성화됩니다.</span>
-            </div>
-        </div>
+        const uniqueLiveScores = [...new Set(teams.map(t => t.liveSumScore))].sort((a, b) => b - a);
 
-        <div class="card" id="resultCard" style="display: none;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-                <h3 style="margin: 0; font-size: 15px;">2. 게임별 실시간 팀 매칭 & 스코어</h3>
-                <div style="display: flex; gap: 6px;">
-                    <button class="kakao-share" onclick="shareMatchToKakao()" style="padding: 5px 10px; font-size: 12px;">💬 공유</button>
-                    <button class="danger" id="cancelMatchBtn" onclick="cancelMatch()" style="padding: 5px 10px; font-size: 12px; display: none;">🛑 취소</button>
-                </div>
-            </div>
+        document.getElementById('teamsContainer').innerHTML = teams.map((team, idx) => {
+            const avg = team.members.length > 0 ? (team.totalScore / team.members.length).toFixed(1) : 0;
+            let rankClass = '';
+            if (team.liveSumScore > 0) {
+                if (team.liveSumScore === uniqueLiveScores[0]) rankClass = 'rank-1';
+                else if (team.liveSumScore === uniqueLiveScores[1]) rankClass = 'rank-2';
+                else rankClass = 'rank-3';
+            }
 
-            <div class="team-mode-bar" id="adminTeamControlPanel" style="display: none; background: #eff6ff; border: 1px solid #bfdbfe;">
-                <div style="font-weight: bold; color: #1e40af; width: 100%;">🛠️ [관리자] 최초 팀 편성 설정</div>
-                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%;">
-                    <label><input type="radio" name="teamMode" value="current" checked onchange="toggleTeamMode()"> 당일 점수 기준</label>
-                    <label><input type="radio" name="teamMode" value="history" onchange="toggleTeamMode()"> 누적 에버 기준</label>
-                    
-                    <div id="historyModeUI" style="display: none; align-items: center; gap: 4px;">
-                        <select id="historyMonthSelect" onchange="computeAndRenderTeams()" style="padding: 4px; font-size: 12px;">
-                            <option value="all">전체 기간</option>
-                        </select>
+            return `
+                <div class="team-box ${rankClass}">
+                    <h3>팀 ${idx + 1} <span style="font-size:12px;">(1G 합산: ${team.liveSumScore})</span></h3>
+                    <div class="team-stats">기준총점: ${team.totalScore.toFixed(0)} | 평균: ${avg}</div>
+                    <div>${team.members.map(m => `
+                        <div class="team-member">
+                            <span>${m.name}</span>
+                            <span style="display: flex; gap: 6px; align-items: center;">
+                                <span style="font-size: 11px; color: #64748b;">(기준:${m.sortingScore.toFixed(1)})</span>
+                                <strong style="color: var(--primary-color); font-size: 13px;">${m.displayGameScore > 0 ? m.displayGameScore + '점' : '-'}</strong>
+                            </span>
+                        </div>`).join('')}
                     </div>
-                    <button class="success" onclick="confirmAndPublishTeams()" style="padding: 6px 10px; font-size: 12px; margin-left: auto;">팀 편성 확정 공유</button>
-                </div>
-            </div>
-
-            <div style="background: #f8fafc; border: 1px solid var(--border-color); padding: 10px; border-radius: 8px; margin-bottom: 12px; font-size: 12px;">
-                📌 팀 기준: <strong id="publishedModeDisplay" style="color:var(--primary-color);">당일 에버리지 기준</strong>
-            </div>
-
-            <div class="teams-grid" id="teamsContainer"></div>
-
-            <div style="margin-top: 20px;">
-                <h4 style="font-size: 14px; margin-bottom: 4px;">📝 4게임 스코어 입력</h4>
-                <div style="font-size: 11px; color: #64748b; margin-bottom: 8px;">💡 좌측 1게임 칸 옆에 최초 편성된 팀 번호가 고정 표기되며, 점수를 넣으면 상단 팀 합산에 실시간 반영됩니다.</div>
-                <div style="overflow-x: auto;">
-                    <table class="score-table">
-                        <thead>
-                            <tr>
-                                <th>선수명</th>
-                                <th>1게임 (올커버/팀)</th>
-                                <th>2게임 (올커버)</th>
-                                <th>3게임 (올커버)</th>
-                                <th>4게임 (올커버)</th>
-                                <th>총점</th>
-                                <th>평균</th>
-                            </tr>
-                        </thead>
-                        <tbody id="scoreTableBody"></tbody>
-                    </table>
-                </div>
-                <div style="margin-top: 12px; text-align: right;" id="saveRecordContainer">
-                    <button class="success" onclick="saveMatchRecord()" style="padding: 8px 14px; font-size: 13px;">💾 정모 기록 DB 저장 (관리자)</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="history-tab" class="tab-content">
-        <div class="card">
-            <h3 style="margin-top: 0; font-size: 15px;">📊 종합 통계 및 분석</h3>
-            <div class="team-mode-bar">
-                <label><input type="radio" name="statMode" value="team" checked onchange="toggleStatMode()"> 👥 팀 전체 통계</label>
-                <label><input type="radio" name="statMode" value="individual" onchange="toggleStatMode()"> 👤 개인별 통계</label>
-            </div>
-
-            <div id="teamStatView">
-                <div id="teamStatContent">
-                    <div class="stat-summary-box">
-                        <div class="stat-item"><div class="stat-value" id="statTotalMeets">0회</div><div class="stat-label">진행 정모</div></div>
-                        <div class="stat-item"><div class="stat-value" id="statOverallAvg">0.0</div><div class="stat-label">역대 팀 에버</div></div>
-                    </div>
-                    <h4 style="font-size: 13px; margin-top: 15px; color:#334155;">📈 정모별 팀 평균 에버리지</h4>
-                    <div class="chart-container"><canvas id="teamAvgChart"></canvas></div>
-                    
-                    <div class="game-selector-bar" style="margin-top: 25px; gap: 8px; justify-content: space-between;">
-                        <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 12px;">
-                            <label style="font-weight: 600;">출석 기간:</label>
-                            <select id="attendStartMonth" onchange="renderTeamStats()" style="padding: 4px; font-size: 12px;"></select>
-                            <span>~</span>
-                            <select id="attendEndMonth" onchange="renderTeamStats()" style="padding: 4px; font-size: 12px;"></select>
-                        </div>
-                        <div style="font-size: 12px;">
-                            <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;">
-                                <input type="checkbox" id="showAllAttendance" onchange="renderTeamStats()" style="width: 14px; height: 14px;"> 전체 순위
-                            </label>
-                        </div>
-                    </div>
-
-                    <h4 id="attendanceChartTitle" style="font-size: 13px; margin-top: 15px; color:#334155;">🏆 멤버별 출석률 (Top 10)</h4>
-                    <div class="chart-container" id="attendanceChartWrapper"><canvas id="attendanceChart"></canvas></div>
-                </div>
-                <div id="emptyTeamStats" class="empty-stats" style="display:none;">저장된 기록이 없습니다.</div>
-            </div>
-
-            <div id="individualStatView" style="display:none;">
-                <div class="game-selector-bar" style="gap: 10px; justify-content: space-between; flex-wrap: wrap; font-size: 12px;">
-                    <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
-                        <label for="statPlayerSelect" style="font-weight: 600;">선수:</label>
-                        <input type="text" id="statPlayerSearch" placeholder="검색" oninput="filterStatPlayerDropdown()" style="padding: 4px; width: 80px; font-size: 12px;">
-                        <select id="statPlayerSelect" onchange="renderIndividualStats()" style="padding: 4px; font-size: 12px; min-width: 90px;"></select>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
-                        <label style="font-weight: 600;">기간:</label>
-                        <select id="indivStartMonth" onchange="renderIndividualStats()" style="padding: 4px; font-size: 12px;"></select>
-                        <span>~</span>
-                        <select id="indivEndMonth" onchange="renderIndividualStats()" style="padding: 4px; font-size: 12px;"></select>
-                    </div>
-                </div>
-                <div id="indivStatContent">
-                    <div class="stat-summary-box">
-                        <div class="stat-item"><div class="stat-value" id="indivAttendRate">0%</div><div class="stat-label" id="indivAttendCount">출석 0회</div></div>
-                        <div class="stat-item"><div class="stat-value" id="indivOverallAvg">0.0</div><div class="stat-label">개인 에버</div></div>
-                        <div class="stat-item"><div class="stat-value" id="indivHighGame">0</div><div class="stat-label">High</div></div>
-                        <div class="stat-item"><div class="stat-value" id="indivCoverCount">0회</div><div class="stat-label">올커버</div></div>
-                    </div>
-                    <h4 style="font-size: 13px; margin-top: 15px; color:#334155;">📈 개인 에버리지 추이</h4>
-                    <div class="chart-container"><canvas id="indivAvgChart"></canvas></div>
-
-                    <div class="game-selector-bar" style="margin-top: 25px; gap: 10px; justify-content: space-between; flex-wrap: wrap; font-size: 12px;">
-                        <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
-                            <label style="font-weight: 600;">전체 기간:</label>
-                            <select id="clubStatStartMonth" onchange="renderClubStatsTable()" style="padding: 4px; font-size: 12px;"></select>
-                            <span>~</span>
-                            <select id="clubStatEndMonth" onchange="renderClubStatsTable()" style="padding: 4px; font-size: 12px;"></select>
-                        </div>
-                        <div style="display: flex; gap: 4px;">
-                            <button class="kakao-share" onclick="shareClubStatsToKakao()" style="padding: 4px 8px; font-size: 11px;">💬 공유</button>
-                            <button class="success" onclick="exportClubStatsExcel()" style="padding: 4px 8px; font-size: 11px;">📥 엑셀</button>
-                        </div>
-                    </div>
-
-                    <h4 style="font-size: 13px; margin-top: 15px; color:#334155;">🎳 클럽원 전체 순위표</h4>
-                    <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">💡 항목을 클릭하면 정렬됩니다.</div>
-                    <div style="overflow-x: auto;">
-                        <table class="score-table" id="clubStatsTable">
-                            <thead>
-                                <tr>
-                                    <th onclick="sortClubStats('rank')">순위</th>
-                                    <th onclick="sortClubStats('name')">이름</th>
-                                    <th onclick="sortClubStats('avg')">에버</th>
-                                    <th onclick="sortClubStats('high')">High</th>
-                                    <th onclick="sortClubStats('low')">Low</th>
-                                    <th onclick="sortClubStats('diff')">편차</th>
-                                    <th onclick="sortClubStats('games')">게임</th>
-                                </tr>
-                            </thead>
-                            <tbody id="clubStatsTableBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-                <div id="emptyIndivStats" class="empty-stats" style="display:none;">선수를 선택해주세요.</div>
-            </div>
-        </div>
-
-        <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-                <h3 style="margin: 0; font-size: 15px;">📅 역대 정모 기록</h3>
-                <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
-                    <select id="historyFilterMonthSelect" onchange="filterHistory()" style="padding: 6px; font-size: 12px; font-weight: 600; color: var(--primary-color);">
-                        <option value="all">전체 월별</option>
-                    </select>
-                    <input type="text" id="searchInput" class="search-bar" placeholder="예: 안주식 김연희" oninput="filterHistory()">
-                </div>
-            </div>
-            <div id="historyContainer" style="margin-top: 12px;"></div>
-            <div id="loadMoreContainer" style="text-align: center; margin-top: 15px; display: none;">
-                <button onclick="loadMoreHistory()" class="secondary" style="width: 100%; padding: 8px; font-size: 12px;">🔽 이전 기록 더보기 (+5개)</button>
-            </div>
-        </div>
-
-        <div class="card" id="adminDBControlCard" style="border: 2px solid #e2e8f0; background-color: #f8fafc; display: none;">
-            <h3 style="margin-top:0; font-size: 14px; color: #0f172a;">💾 데이터베이스 관리 (관리자)</h3>
-            <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
-                <button class="success" onclick="exportAllDB()" style="padding: 6px 10px; font-size: 12px;">📥 백업 (CSV)</button>
-                <input type="file" id="csvFileInput" accept=".csv" style="display: none;" onchange="importCSV(event)">
-                <button class="secondary" onclick="checkPasswordAndExecute(() => document.getElementById('csvFileInput').click())" style="padding: 6px 10px; font-size: 12px;">📤 업로드</button>
-                <button class="secondary" onclick="changeAdminPassword()" style="background-color: #475569; padding: 6px 10px; font-size: 12px;">🔒 비번변경</button>
-                <button class="secondary" onclick="changeClubJoinPassword()" style="background-color: #0284c7; padding: 6px 10px; font-size: 12px;">🔑 인증번호</button>
-                <button class="secondary"
+                </div>`;
+        }).join('');
+    }
