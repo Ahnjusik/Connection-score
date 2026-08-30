@@ -151,6 +151,7 @@
     </div>
 
     <div id="main-tab" class="tab-content active">
+        <!-- 대기 중일 때 보여지는 명부 카드 -->
         <div class="card" id="adminControlCard" style="display: none;">
             <h3 style="font-size: 15px; margin-top:0;">1. 회원명부 및 가입 승인 관리</h3>
             
@@ -202,9 +203,10 @@
             </div>
         </div>
 
+        <!-- 🚀 정모 시작 후 상단에 바로 노출되는 실시간 팀 매칭 & 스코어 카드 -->
         <div class="card" id="resultCard" style="display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-                <h3 style="margin: 0; font-size: 15px;">2. 게임별 실시간 팀 매칭 & 스코어</h3>
+                <h3 style="margin: 0; font-size: 15px;">🎮 게임별 실시간 팀 매칭 & 스코어</h3>
                 <div style="display: flex; gap: 6px;">
                     <button class="kakao-share" onclick="shareMatchToKakao()" style="padding: 5px 10px; font-size: 12px;">💬 공유</button>
                     <button class="danger" id="cancelMatchBtn" onclick="cancelMatch()" style="padding: 5px 10px; font-size: 12px; display: none;">🛑 취소</button>
@@ -231,20 +233,28 @@
                 📌 팀 기준: <strong id="publishedModeDisplay" style="color:var(--primary-color);">당일 에버리지 기준</strong>
             </div>
 
+            <!-- 게임별 선택 탭 (1게임 ~ 4게임별 팀 현황 확인 가능) -->
+            <div style="display: flex; gap: 5px; margin-bottom: 12px;">
+                <button type="button" class="game-tab-btn secondary" id="gTab1" onclick="switchGameTab(1)" style="flex: 1; padding: 6px; font-size: 12px; background: var(--primary-color);">1게임 보기</button>
+                <button type="button" class="game-tab-btn secondary" id="gTab2" onclick="switchGameTab(2)" style="flex: 1; padding: 6px; font-size: 12px; background: #64748b;">2게임 보기</button>
+                <button type="button" class="game-tab-btn secondary" id="gTab3" onclick="switchGameTab(3)" style="flex: 1; padding: 6px; font-size: 12px; background: #64748b;">3게임 보기</button>
+                <button type="button" class="game-tab-btn secondary" id="gTab4" onclick="switchGameTab(4)" style="flex: 1; padding: 6px; font-size: 12px; background: #64748b;">4게임 보기</button>
+            </div>
+
             <div class="teams-grid" id="teamsContainer"></div>
 
             <div style="margin-top: 20px;">
                 <h4 style="font-size: 14px; margin-bottom: 4px;">📝 4게임 스코어 입력</h4>
-                <div style="font-size: 11px; color: #64748b; margin-bottom: 8px;">💡 좌측 1게임 칸 옆에 최초 편성된 팀 번호가 고정 표기되며, 점수를 넣으면 상단 팀 합산에 실시간 반영됩니다.</div>
+                <div style="font-size: 11px; color: #64748b; margin-bottom: 8px;">💡 각 게임 칸에 점수를 입력하면 상단 팀 합산에 실시간 반영되며, 해당 게임의 팀 뱃지가 표시됩니다.</div>
                 <div style="overflow-x: auto;">
                     <table class="score-table">
                         <thead>
                             <tr>
                                 <th>선수명</th>
                                 <th>1게임 (올커버/팀)</th>
-                                <th>2게임 (올커버)</th>
-                                <th>3게임 (올커버)</th>
-                                <th>4게임 (올커버)</th>
+                                <th>2게임 (올커버/팀)</th>
+                                <th>3게임 (올커버/팀)</th>
+                                <th>4게임 (올커버/팀)</th>
                                 <th>총점</th>
                                 <th>평균</th>
                             </tr>
@@ -443,6 +453,7 @@
     let allPlayerNames = []; 
     let visibleHistoryCount = 3; 
     let isPlayerListExpanded = false;
+    let currentGameTab = 1; // 현재 보고 있는 게임 탭 (1~4)
     
     let currentSortColumn = 'avg';
     let currentSortDirection = 'desc';
@@ -892,6 +903,17 @@
         if (tabId === 'history-tab') updateStatistics();
     }
 
+    function switchGameTab(gameNum) {
+        currentGameTab = gameNum;
+        for (let i = 1; i <= 4; i++) {
+            const btn = document.getElementById(`gTab${i}`);
+            if (btn) {
+                btn.style.background = (i === gameNum) ? 'var(--primary-color)' : '#64748b';
+            }
+        }
+        computeAndRenderTeams();
+    }
+
     document.getElementById('playerName').addEventListener('keypress', function(e) { if (e.key === 'Enter') document.getElementById('playerScore').focus(); });
     document.getElementById('playerScore').addEventListener('keypress', function(e) { if (e.key === 'Enter') addPlayer(); });
 
@@ -1109,7 +1131,7 @@
             if (Math.floor(index / teamCount) >= 1) { teams.sort((a, b) => a.totalScore - b.totalScore); tIdx = teams.indexOf(teams[0]); }
             
             let pLive = liveScores[player.id] || {};
-            let dispScore = parseFloat(pLive.g1) || 0;
+            let dispScore = parseFloat(pLive[`g${currentGameTab}`]) || 0;
 
             teams[tIdx].memberIds.add(player.id);
             teams[tIdx].members.push({ ...player, displayGameScore: dispScore });
@@ -1130,7 +1152,7 @@
 
             return `
                 <div class="team-box ${rankClass}">
-                    <h3>팀 ${idx + 1} <span style="font-size:12px;">(1G 합산: ${team.liveSumScore})</span></h3>
+                    <h3>팀 ${idx + 1} <span style="font-size:12px;">(${currentGameTab}G 합산: ${team.liveSumScore})</span></h3>
                     <div class="team-stats">기준총점: ${team.totalScore.toFixed(0)} | 평균: ${avg}</div>
                     <div>${team.members.map(m => `
                         <div class="team-member">
@@ -1144,12 +1166,14 @@
                 </div>`;
         }).join('');
 
+        // 각 게임별(1~4G) 소속 팀 번호 배지 업데이트
         matchResults.forEach(p => {
-            let badgeElem = document.getElementById(`team_badge_g1_${p.id}`);
-            if (badgeElem) {
-                let assignedTeam = 1;
-                teams.forEach((t, tIndex) => { if (t.memberIds.has(p.id)) assignedTeam = tIndex + 1; });
-                badgeElem.innerText = `[팀 ${assignedTeam}]`;
+            let assignedTeam = 1;
+            teams.forEach((t, tIndex) => { if (t.memberIds.has(p.id)) assignedTeam = tIndex + 1; });
+            
+            for (let g = 1; g <= 4; g++) {
+                let badgeElem = document.getElementById(`team_badge_g${g}_${p.id}`);
+                if (badgeElem) badgeElem.innerText = `[팀 ${assignedTeam}]`;
             }
         });
     }
@@ -1159,20 +1183,14 @@
         document.getElementById('scoreTableBody').innerHTML = activePlayers.map(p => `
             <tr>
                 <td style="font-weight: 600; font-size:13px;">${p.name} ${p.isDummy ? '(더미)' : ''}</td>
-                <td>
-                    <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
-                        <div style="display:flex; align-items:center; gap:2px;">
-                            <input type="number" class="score-input" data-id="${p.id}" data-game="1" oninput="onScoreChange(${p.id})">
-                            <label style="font-size:10px; cursor:pointer;"><input type="checkbox" class="cover-checkbox" data-id="${p.id}" data-game="1" onchange="onScoreChange(${p.id})">올커버</label>
-                        </div>
-                        <span id="team_badge_g1_${p.id}" class="team-badge">[팀 1]</span>
-                    </div>
-                </td>
-                ${[2,3,4].map(g => `
+                ${[1, 2, 3, 4].map(g => `
                     <td>
-                        <div style="display:flex; align-items:center; justify-content:center; gap:2px;">
-                            <input type="number" class="score-input" data-id="${p.id}" data-game="${g}" oninput="onScoreChange(${p.id})">
-                            <label style="font-size:10px; cursor:pointer;"><input type="checkbox" class="cover-checkbox" data-id="${p.id}" data-game="${g}" onchange="onScoreChange(${p.id})">올커버</label>
+                        <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
+                            <div style="display:flex; align-items:center; gap:2px;">
+                                <input type="number" class="score-input" data-id="${p.id}" data-game="${g}" oninput="onScoreChange(${p.id})">
+                                <label style="font-size:10px; cursor:pointer;"><input type="checkbox" class="cover-checkbox" data-id="${p.id}" data-game="${g}" onchange="onScoreChange(${p.id})">올커버</label>
+                            </div>
+                            <span id="team_badge_g${g}_${p.id}" class="team-badge">[팀 1]</span>
                         </div>
                     </td>
                 `).join('')}
