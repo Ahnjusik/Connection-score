@@ -151,58 +151,6 @@
     </div>
 
     <div id="main-tab" class="tab-content active">
-        <!-- 대기 중일 때 보여지는 명부 카드 -->
-        <div class="card" id="adminControlCard" style="display: none;">
-            <h3 style="font-size: 15px; margin-top:0;">1. 회원명부 및 가입 승인 관리</h3>
-            
-            <div id="pendingApprovalSection" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; margin-bottom: 15px; display: none;">
-                <h4 style="margin-top: 0; color: #1e40af; font-size: 14px;">📥 신규 가입 대기 회원</h4>
-                <div id="pendingApprovalList" style="display: flex; flex-direction: column; gap: 6px;"></div>
-            </div>
-
-            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; font-size: 13px;">
-                <div>
-                    <label for="teamCount" style="font-weight: 600; margin-right: 5px;">팀 수:</label>
-                    <select id="teamCount" style="width: 70px; padding: 6px;" onchange="saveSettings()">
-                        <option value="2">2개</option><option value="3">3개</option><option value="4" selected>4개</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="targetMonthSelect" style="font-weight: 600; margin-right: 5px;">📅 기준 월:</label>
-                    <select id="targetMonthSelect" onchange="refreshPlayerScoresByMonth()" style="padding: 6px; font-weight: 600; color: var(--primary-color);">
-                        <option value="recent">전체 에버리지</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="input-group">
-                <input type="text" id="playerName" lang="ko" placeholder="회원 이름" style="ime-mode: active;" />
-                <input type="number" id="playerScore" placeholder="수동 점수" />
-                <button onclick="addPlayer()" style="padding: 8px;">추가</button>
-            </div>
-
-            <div class="list-header">
-                <span>참석 회원 체크</span>
-                <div style="display: flex; gap: 4px; align-items: center;">
-                    <button type="button" id="expandListBtn" onclick="toggleExpandPlayerList()" style="padding: 3px 6px; font-size: 11px; background: #0284c7;">펼치기</button>
-                    <button type="button" onclick="toggleAll(true)" style="padding: 3px 6px; font-size: 11px; background: #64748b;">전체선택</button>
-                    <button type="button" onclick="toggleAll(false)" style="padding: 3px 6px; font-size: 11px; background: #64748b;">해제</button>
-                </div>
-            </div>
-            <div class="player-list" id="playerListContainer"></div>
-            <div class="btn-container" style="margin-top: 15px;">
-                <button onclick="initMatch()" style="flex: 2; padding: 10px;">🚀 정모 시작 (화면 오픈)</button>
-                <button onclick="resetData()" class="secondary" style="flex: 1; padding: 10px;">초기화</button>
-            </div>
-        </div>
-
-        <div class="card" id="waitingNoticeCard">
-            <div class="notice-banner">
-                ⏳ 현재 진행 중인 정모가 없습니다.<br>
-                <span style="font-size: 12px; color: #64748b; font-weight: normal; margin-top: 6px; display: block;">관리자가 정모를 시작하면 입력 창이 활성화됩니다.</span>
-            </div>
-        </div>
-
         <!-- 🚀 정모 시작 후 상단에 바로 노출되는 실시간 팀 매칭 & 스코어 카드 -->
         <div class="card" id="resultCard" style="display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
@@ -265,6 +213,58 @@
                 <div style="margin-top: 12px; text-align: right;" id="saveRecordContainer">
                     <button class="success" onclick="saveMatchRecord()" style="padding: 8px 14px; font-size: 13px;">💾 정모 기록 DB 저장 (관리자)</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- 회원명부 및 가입 승인 관리 카드 (아래로 이동) -->
+        <div class="card" id="adminControlCard" style="display: none;">
+            <h3 style="font-size: 15px; margin-top:0;">1. 회원명부 및 가입 승인 관리</h3>
+            
+            <div id="pendingApprovalSection" style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; margin-bottom: 15px; display: none;">
+                <h4 style="margin-top: 0; color: #1e40af; font-size: 14px;">📥 신규 가입 대기 회원</h4>
+                <div id="pendingApprovalList" style="display: flex; flex-direction: column; gap: 6px;"></div>
+            </div>
+
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; font-size: 13px;">
+                <div>
+                    <label for="teamCount" style="font-weight: 600; margin-right: 5px;">팀 수:</label>
+                    <select id="teamCount" style="width: 70px; padding: 6px;" onchange="saveSettings()">
+                        <option value="2">2개</option><option value="3">3개</option><option value="4" selected>4개</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="targetMonthSelect" style="font-weight: 600; margin-right: 5px;">📅 기준 월:</label>
+                    <select id="targetMonthSelect" onchange="refreshPlayerScoresByMonth()" style="padding: 6px; font-weight: 600; color: var(--primary-color);">
+                        <option value="recent">전체 에버리지</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <input type="text" id="playerName" lang="ko" placeholder="회원 이름" style="ime-mode: active;" />
+                <input type="number" id="playerScore" placeholder="수동 점수" />
+                <button onclick="addPlayer()" style="padding: 8px;">추가</button>
+            </div>
+
+            <div class="list-header">
+                <span>참석 회원 체크</span>
+                <div style="display: flex; gap: 4px; align-items: center;">
+                    <button type="button" id="expandListBtn" onclick="toggleExpandPlayerList()" style="padding: 3px 6px; font-size: 11px; background: #0284c7;">펼치기</button>
+                    <button type="button" onclick="toggleAll(true)" style="padding: 3px 6px; font-size: 11px; background: #64748b;">전체선택</button>
+                    <button type="button" onclick="toggleAll(false)" style="padding: 3px 6px; font-size: 11px; background: #64748b;">해제</button>
+                </div>
+            </div>
+            <div class="player-list" id="playerListContainer"></div>
+            <div class="btn-container" style="margin-top: 15px;">
+                <button onclick="initMatch()" style="flex: 2; padding: 10px;">🚀 정모 시작 (화면 오픈)</button>
+                <button onclick="resetData()" class="secondary" style="flex: 1; padding: 10px;">초기화</button>
+            </div>
+        </div>
+
+        <div class="card" id="waitingNoticeCard">
+            <div class="notice-banner">
+                ⏳ 현재 진행 중인 정모가 없습니다.<br>
+                <span style="font-size: 12px; color: #64748b; font-weight: normal; margin-top: 6px; display: block;">관리자가 정모를 시작하면 입력 창이 활성화됩니다.</span>
             </div>
         </div>
     </div>
@@ -1309,7 +1309,7 @@
                 <div style="overflow-x: auto;">
                     <table class="score-table" style="background: white;">
                         <thead><tr><th>순위</th><th>이름</th><th>1G</th><th>2G</th><th>3G</th><th>4G</th><th>총점</th><th>에버</th></tr></thead>
-                        <tbody>${filteredRecords.map((r, i) => `<tr><td>-</td><td><strong>${r.name}</strong></td><td>${r.g1}</td><td>${r.g2}</td><td>${r.g3}</td><td>${r.g4}</td><td><strong>${r.total}</strong></td><td>${r.avg}</td></tr>`).join('')}</tbody>
+                        <tbody>${filteredRecords.map((r, i) => `<tr><td><strong>${i + 1}위</strong></td><td><strong>${r.name}</strong></td><td>${r.g1}</td><td>${r.g2}</td><td>${r.g3}</td><td>${r.g4}</td><td><strong>${r.total}</strong></td><td>${r.avg}</td></tr>`).join('')}</tbody>
                     </table>
                 </div>
             </div>`;
