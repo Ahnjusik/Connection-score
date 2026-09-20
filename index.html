@@ -259,11 +259,12 @@
                         <option value="4" selected>4개 팀</option>
                     </select>
                 </div>
-                <div>
-                    <label for="targetMonthSelect" style="font-weight: 600; margin-right: 5px;">📅 기준 월:</label>
-                    <select id="targetMonthSelect" onchange="refreshPlayerScoresByMonth()" style="padding: 6px; font-weight: 600; color: var(--primary-color);">
-                        <option value="recent">전체 에버리지</option>
-                    </select>
+                <!-- 🎯 기준 에버 범위 설정 영역으로 원복됨 -->
+                <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                    <label style="font-weight: 600; margin-right: 2px;">📅 기준 에버:</label>
+                    <select id="targetStartMonthSelect" onchange="refreshPlayerScoresByMonth()" style="padding: 6px; font-weight: 600; color: var(--primary-color); min-width: 70px;"></select>
+                    <span>~</span>
+                    <select id="targetEndMonthSelect" onchange="refreshPlayerScoresByMonth()" style="padding: 6px; font-weight: 600; color: var(--primary-color); min-width: 70px;"></select>
                 </div>
             </div>
 
@@ -969,14 +970,29 @@
         return count > 0 ? parseFloat((totalSum / count).toFixed(1)) : null;
     }
 
+    // 🎯 단일 선택 대신 시작/종료 범위를 선택할 수 있도록 수정
     function populateTargetMonthSelect() {
-        const select = document.getElementById('targetMonthSelect');
-        const currentVal = select.value || 'recent';
-        select.innerHTML = '<option value="recent">전체 에버리지</option>';
+        const startSelect = document.getElementById('targetStartMonthSelect');
+        const endSelect = document.getElementById('targetEndMonthSelect');
+        if (!startSelect || !endSelect) return;
+        
+        const currentStartVal = startSelect.value || 'all';
+        const currentEndVal = endSelect.value || 'all';
+        
+        startSelect.innerHTML = '<option value="all">전체</option>';
+        endSelect.innerHTML = '<option value="all">전체</option>';
+        
         const months = new Set();
         history.forEach(h => { const m = h.date.match(/^(\d{4}[-./]\d{2})/); if(m) months.add(m[1].replace(/[-/]/g, '-')); });
-        Array.from(months).sort((a,b)=>b.localeCompare(a)).forEach(m => select.appendChild(new Option(m + '월 기준', m)));
-        select.value = currentVal;
+        const sortedMonths = Array.from(months).sort();
+        
+        sortedMonths.forEach(m => {
+            startSelect.appendChild(new Option(m + '월', m));
+            endSelect.appendChild(new Option(m + '월', m));
+        });
+        
+        startSelect.value = sortedMonths.includes(currentStartVal) ? currentStartVal : 'all';
+        endSelect.value = sortedMonths.includes(currentEndVal) ? currentEndVal : 'all';
     }
 
     function populateHistoryMonthDropdown() {
@@ -1057,11 +1073,14 @@
         endSelect.value = sortedMonths.includes(endVal) ? endVal : sortedMonths[sortedMonths.length - 1];
     }
 
+    // 🎯 범위 설정을 반영하여 점수 갱신
     function refreshPlayerScoresByMonth() {
-        const selectedMonth = document.getElementById('targetMonthSelect').value;
+        const startMonth = document.getElementById('targetStartMonthSelect').value;
+        const endMonth = document.getElementById('targetEndMonthSelect').value;
+        
         players.forEach(p => {
             if (p.isDummy) return;
-            const autoAvg = calculateMemberAvgForRange(p.name, selectedMonth === 'recent' ? 'all' : selectedMonth, selectedMonth === 'recent' ? 'all' : selectedMonth);
+            const autoAvg = calculateMemberAvgForRange(p.name, startMonth, endMonth);
             if (autoAvg !== null) { p.score = autoAvg; p.isAuto = true; } else { p.isAuto = false; }
         });
         syncPlayersToDB();
@@ -1076,13 +1095,14 @@
         if (!name) return alert('이름을 입력해주세요.');
 
         const isDummy = name.includes('더미') || name.includes('휴식') || name.includes('용병');
-        const selectedMonth = document.getElementById('targetMonthSelect').value;
+        const startMonth = document.getElementById('targetStartMonthSelect').value;
+        const endMonth = document.getElementById('targetEndMonthSelect').value;
         let isAuto = false;
 
         if (isNaN(score) || score <= 0) {
             if (isDummy) { score = 100; }
             else {
-                const autoAvg = calculateMemberAvgForRange(name, selectedMonth === 'recent' ? 'all' : selectedMonth, selectedMonth === 'recent' ? 'all' : selectedMonth);
+                const autoAvg = calculateMemberAvgForRange(name, startMonth, endMonth);
                 if (autoAvg !== null) { score = autoAvg; isAuto = true; } else { score = 0; }
             }
         }
