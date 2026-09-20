@@ -78,6 +78,16 @@
         .score-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; white-space: nowrap; }
         .score-table th, .score-table td { border: 1px solid var(--border-color); padding: 6px 4px; text-align: center; }
         .score-table th { background-color: #f1f5f9; color: #475569; }
+        
+        /* 엑셀 셀 고정(Freeze Pane) 효과: 첫 번째 열(선수명) 고정 */
+        .score-table th:first-child, .score-table td:first-child {
+            position: sticky;
+            left: 0;
+            z-index: 3;
+        }
+        .score-table th:first-child { background-color: #e2e8f0; color: #334155; }
+        .score-table td:first-child { background-color: #ffffff; font-weight: 600; box-shadow: 2px 0 5px -2px rgba(0,0,0,0.1); }
+
         .score-input { width: 45px; padding: 4px; text-align: center; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; }
         
         .history-box { background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
@@ -161,17 +171,18 @@
                 </div>
             </div>
 
-            <!-- 관리자용 최초 팀 편성 조작 컨트롤러 -->
+            <!-- 관리자용 최초 팀 편성 조작 컨트롤러 (기간 설정 기능 확장) -->
             <div class="team-mode-bar" id="adminTeamControlPanel" style="display: none; background: #eff6ff; border: 1px solid #bfdbfe;">
                 <div style="font-weight: bold; color: #1e40af; width: 100%;">🛠️ [관리자] 최초 팀 편성 설정</div>
                 <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%;">
                     <label><input type="radio" name="teamMode" value="current" checked onchange="toggleTeamMode()"> 당일 점수 기준</label>
                     <label><input type="radio" name="teamMode" value="history" onchange="toggleTeamMode()"> 누적 에버 기준</label>
                     
-                    <div id="historyModeUI" style="display: none; align-items: center; gap: 4px;">
-                        <select id="historyMonthSelect" onchange="computeAndRenderTeams()" style="padding: 4px; font-size: 12px;">
-                            <option value="all">전체 기간</option>
-                        </select>
+                    <div id="historyModeUI" style="display: none; align-items: center; gap: 4px; font-size: 12px;">
+                        <span>기간:</span>
+                        <select id="historyStartMonth" onchange="computeAndRenderTeams()" style="padding: 4px; font-size: 12px;"></select>
+                        <span>~</span>
+                        <select id="historyEndMonth" onchange="computeAndRenderTeams()" style="padding: 4px; font-size: 12px;"></select>
                     </div>
                     <button class="success" onclick="confirmAndPublishTeams()" style="padding: 6px 10px; font-size: 12px; margin-left: auto;">팀 편성 확정 공유</button>
                 </div>
@@ -216,7 +227,7 @@
             </div>
         </div>
 
-        <!-- 회원명부 및 가입 승인 관리 카드 (아래로 이동) -->
+        <!-- 회원명부 및 가입 승인 관리 카드 -->
         <div class="card" id="adminControlCard" style="display: none;">
             <h3 style="font-size: 15px; margin-top:0;">1. 회원명부 및 가입 승인 관리</h3>
             
@@ -441,7 +452,7 @@
     let matchResults = []; 
     let history = []; 
     let liveScores = {}; 
-    let publishedTeamSettings = { mode: 'current', monthFilter: 'all' }; 
+    let publishedTeamSettings = { mode: 'current', startMonth: 'all', endMonth: 'all' }; 
     let hiddenStatMembers = {}; 
     let pendingApprovals = {};
     let approvedKakaoIds = {};
@@ -453,7 +464,7 @@
     let allPlayerNames = []; 
     let visibleHistoryCount = 3; 
     let isPlayerListExpanded = false;
-    let currentGameTab = 1; // 현재 보고 있는 게임 탭 (1~4)
+    let currentGameTab = 1;
     
     let currentSortColumn = 'avg';
     let currentSortDirection = 'desc';
@@ -545,6 +556,7 @@
             }
             populateTargetMonthSelect();
             populateHistoryMonthDropdown();
+            populateHistoryTeamRangeSelects();
             populateAttendanceMonthSelects();
             populateIndivMonthSelects();
             populateClubStatMonthSelects();
@@ -592,7 +604,7 @@
                     const activeList = snap.val() || players.filter(p => p.checked);
                     matchResults = activeList;
                     renderScoreTable(matchResults);
-                    setupMonthSelectForHistory();
+                    populateHistoryTeamRangeSelects();
                     document.getElementById('waitingNoticeCard').style.display = 'none';
                     document.getElementById('resultCard').style.display = 'block';
                 });
@@ -917,11 +929,15 @@
     document.getElementById('playerName').addEventListener('keypress', function(e) { if (e.key === 'Enter') document.getElementById('playerScore').focus(); });
     document.getElementById('playerScore').addEventListener('keypress', function(e) { if (e.key === 'Enter') addPlayer(); });
 
-    function calculateMemberAvgForMonth(memberName, monthFilter) {
+    function calculateMemberAvgForRange(memberName, startMonth, endMonth) {
         let totalSum = 0, count = 0;
         history.forEach(h => {
-            const hDate = h.date.replace(/[-/]/g, '-');
-            if (monthFilter !== 'recent' && !hDate.startsWith(monthFilter)) return;
+            const m = h.date.match(/^(\d{4}[-./]\d{2})/);
+            if (!m) return;
+            const hm = m[1].replace(/[-/]/g, '-');
+            if (startMonth !== 'all' && hm < startMonth) return;
+            if (endMonth !== 'all' && hm > endMonth) return;
+
             const record = h.records.find(r => r.name === memberName);
             if (record && parseFloat(record.avg) > 0) { totalSum += parseFloat(record.avg); count++; }
         });
@@ -946,6 +962,32 @@
         history.forEach(h => { const m = h.date.match(/^(\d{4}[-./]\d{2})/); if(m) months.add(m[1].replace(/[-/]/g, '-')); });
         Array.from(months).sort((a,b)=>b.localeCompare(a)).forEach(m => select.appendChild(new Option(m + '월', m)));
         select.value = currentVal;
+    }
+
+    function populateHistoryTeamRangeSelects() {
+        const startSelect = document.getElementById('historyStartMonth');
+        const endSelect = document.getElementById('historyEndMonth');
+        if (!startSelect || !endSelect) return;
+        const startVal = startSelect.value, endVal = endSelect.value;
+        startSelect.innerHTML = ''; endSelect.innerHTML = '';
+        
+        const months = new Set();
+        history.forEach(h => { const m = h.date.match(/^(\d{4}[-./]\d{2})/); if(m) months.add(m[1].replace(/[-/]/g, '-')); });
+        const sortedMonths = Array.from(months).sort();
+        
+        if (sortedMonths.length === 0) {
+            startSelect.innerHTML = '<option value="all">없음</option>';
+            endSelect.innerHTML = '<option value="all">없음</option>';
+            return;
+        }
+
+        sortedMonths.forEach(m => {
+            startSelect.appendChild(new Option(m, m));
+            endSelect.appendChild(new Option(m, m));
+        });
+
+        startSelect.value = sortedMonths.includes(startVal) ? startVal : sortedMonths[0];
+        endSelect.value = sortedMonths.includes(endVal) ? endVal : sortedMonths[sortedMonths.length - 1];
     }
 
     function populateAttendanceMonthSelects() {
@@ -994,7 +1036,7 @@
         const selectedMonth = document.getElementById('targetMonthSelect').value;
         players.forEach(p => {
             if (p.isDummy) return;
-            const autoAvg = calculateMemberAvgForMonth(p.name, selectedMonth);
+            const autoAvg = calculateMemberAvgForRange(p.name, selectedMonth === 'recent' ? 'all' : selectedMonth, selectedMonth === 'recent' ? 'all' : selectedMonth);
             if (autoAvg !== null) { p.score = autoAvg; p.isAuto = true; } else { p.isAuto = false; }
         });
         syncPlayersToDB();
@@ -1015,7 +1057,7 @@
         if (isNaN(score) || score <= 0) {
             if (isDummy) { score = 100; }
             else {
-                const autoAvg = calculateMemberAvgForMonth(name, selectedMonth);
+                const autoAvg = calculateMemberAvgForRange(name, selectedMonth === 'recent' ? 'all' : selectedMonth, selectedMonth === 'recent' ? 'all' : selectedMonth);
                 if (autoAvg !== null) { score = autoAvg; isAuto = true; } else { score = 0; }
             }
         }
@@ -1069,7 +1111,11 @@
         const activePlayers = players.filter(p => p.checked);
         if (activePlayers.length < 2) return alert('최소 2명 이상 체크해주세요.');
         
-        let initialSettings = { mode: 'current', monthFilter: 'all' };
+        let initialSettings = { 
+            mode: 'current', 
+            startMonth: document.getElementById('historyStartMonth')?.value || 'all', 
+            endMonth: document.getElementById('historyEndMonth')?.value || 'all' 
+        };
 
         db.ref('bowling_activePlayers').set(activePlayers);
         db.ref('bowling_publishedTeamSettings').set(initialSettings);
@@ -1078,46 +1124,35 @@
         alert('정모가 시작되었습니다!');
     }
 
-    function setupMonthSelectForHistory() {
-        const select = document.getElementById('historyMonthSelect');
-        select.innerHTML = '<option value="all">전체 기간</option>';
-        const months = new Set();
-        history.forEach(h => { const m = h.date.match(/^(\d{4}[-./]\d{2})/); if(m) months.add(m[1].replace(/[-/]/g, '-')); });
-        Array.from(months).sort((a,b)=>b.localeCompare(a)).forEach(m => select.appendChild(new Option(m + '월', m)));
-    }
-
     function confirmAndPublishTeams() {
         checkPasswordAndExecute(() => {
             const mode = document.querySelector('input[name="teamMode"]:checked').value;
-            const monthFilter = document.getElementById('historyMonthSelect').value;
+            const startMonth = document.getElementById('historyStartMonth').value;
+            const endMonth = document.getElementById('historyEndMonth').value;
 
-            let settings = { mode, monthFilter };
+            let settings = { mode, startMonth, endMonth };
             db.ref('bowling_publishedTeamSettings').set(settings).then(() => {
-                alert('팀 편성이 확정되어 공유되었습니다!');
+                alert('팀 편성이 확정되어 모든 회원 화면에 공유되었습니다!');
             });
         });
     }
 
     function updatePublishedModeUI() {
-        let text = publishedTeamSettings.mode === 'current' ? '당일 에버리지 기준' : `누적 에버리지 (${publishedTeamSettings.monthFilter})`;
+        let text = publishedTeamSettings.mode === 'current' ? '당일 에버리지 기준' : `누적 에버리지 (${publishedTeamSettings.startMonth} ~ ${publishedTeamSettings.endMonth})`;
         document.getElementById('publishedModeDisplay').innerText = text;
     }
 
     function computeAndRenderTeams() {
         const teamCount = parseInt(document.getElementById('teamCount').value) || 4;
         const mode = publishedTeamSettings.mode || 'current';
-        const monthFilter = publishedTeamSettings.monthFilter || 'all';
+        const startMonth = publishedTeamSettings.startMonth || 'all';
+        const endMonth = publishedTeamSettings.endMonth || 'all';
 
         const getPlayerBaseSortingScore = (p) => {
             let score = p.score;
             if (mode === 'history') {
-                let tot = 0, cnt = 0;
-                history.forEach(h => {
-                    if (monthFilter !== 'all' && !h.date.replace(/[-/]/g, '-').startsWith(monthFilter)) return;
-                    let rec = h.records.find(r => r.name === p.name);
-                    if (rec && parseFloat(rec.avg) > 0) { tot += parseFloat(rec.avg); cnt++; }
-                });
-                if (cnt > 0) score = parseFloat((tot / cnt).toFixed(1));
+                const avgVal = calculateMemberAvgForRange(p.name, startMonth, endMonth);
+                if (avgVal !== null) score = avgVal;
             }
             return score;
         };
@@ -1166,7 +1201,6 @@
                 </div>`;
         }).join('');
 
-        // 각 게임별(1~4G) 소속 팀 번호 배지 업데이트
         matchResults.forEach(p => {
             let assignedTeam = 1;
             teams.forEach((t, tIndex) => { if (t.memberIds.has(p.id)) assignedTeam = tIndex + 1; });
