@@ -75,15 +75,14 @@
         .team-stats { font-size: 12px; color: #64748b; margin-bottom: 8px; }
         .team-member { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed var(--border-color); font-size: 13px; align-items: center; }
 
-        /* ------------------ 테이블 및 틀고정 스타일 수정 ------------------ */
+        /* 테이블 및 틀고정 스타일 */
         .score-table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 10px; font-size: 12px; white-space: nowrap; }
         .score-table th, .score-table td { border-bottom: 1px solid var(--border-color); border-right: 1px solid var(--border-color); padding: 6px 4px; text-align: center; }
         .score-table th { background-color: #f1f5f9; color: #475569; border-top: 1px solid var(--border-color); }
         .score-table th:first-child, .score-table td:first-child { border-left: 1px solid var(--border-color); }
         
-        /* 엑셀 셀 고정(Freeze Pane) 효과: 첫 번째 열(선수명) 고정 */
         .score-table th:first-child, .score-table td:first-child {
-            position: -webkit-sticky; /* iOS 사파리 호환성 추가 */
+            position: -webkit-sticky;
             position: sticky;
             left: 0;
             z-index: 10;
@@ -92,10 +91,8 @@
         .score-table td:first-child { 
             background-color: #ffffff; 
             font-weight: 600; 
-            /* 오른쪽 경계선을 그림자로 처리하여 스크롤 시 겹침 방지 */
             box-shadow: inset -1px 0 0 var(--border-color), 2px 0 5px -2px rgba(0,0,0,0.1); 
         }
-        /* ----------------------------------------------------------------- */
 
         .score-input { width: 45px; padding: 4px; text-align: center; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; }
         
@@ -113,18 +110,15 @@
         .empty-stats { text-align: center; padding: 30px; color: #94a3b8; background: #f8fafc; border-radius: 8px; font-size: 13px; }
         #loadingMsg { text-align: center; color: var(--primary-color); font-weight: bold; padding: 8px; background: #e0f2fe; border-radius: 8px; margin-bottom: 12px; font-size: 13px; }
         
-        /* 뱃지 스타일 */
         .dummy-badge, .cover-badge { font-size: 10px; padding: 1px 4px; border-radius: 4px; font-weight: 600; }
         .dummy-badge { background: #fee2e2; color: #991b1b; }
         .cover-badge { background: #fef08a; color: #854d0e; }
         
-        /* 팀별 색상 뱃지 */
         .team-badge { font-size: 10px; padding: 2px 5px; border-radius: 4px; font-weight: 600; display: inline-block; margin-top: 2px; }
-        .team-badge-1 { background: #dbeafe; color: #1e40af; } /* 파랑 */
-        .team-badge-2 { background: #dcfce7; color: #166534; } /* 초록 */
-        .team-badge-3 { background: #ffedd5; color: #9a3412; } /* 주황 */
-        .team-badge-4 { background: #f3e8ff; color: #6b21a8; } /* 보라 */
-        .team-badge-5 { background: #fce7f3; color: #9d174d; } /* 핑크 */
+        .team-badge-1 { background: #dbeafe; color: #1e40af; }
+        .team-badge-2 { background: #dcfce7; color: #166534; }
+        .team-badge-3 { background: #ffedd5; color: #9a3412; }
+        .team-badge-4 { background: #f3e8ff; color: #6b21a8; }
         
         .auth-bar { display: flex; justify-content: space-between; align-items: center; background: #e2e8f0; padding: 6px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 12px; flex-wrap: wrap; gap: 6px; }
         .notice-banner { text-align: center; padding: 20px; background: #f1f5f9; border-radius: 10px; color: #475569; font-size: 14px; font-weight: 600; }
@@ -181,14 +175,14 @@
         <!-- 🚀 정모 시작 후 상단에 바로 노출되는 실시간 팀 매칭 & 스코어 카드 -->
         <div class="card" id="resultCard" style="display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-                <h3 style="margin: 0; font-size: 15px;">🎮 게임별 실시간 팀 매칭 & 스코어</h3>
+                <h3 id="resultCardTitle" style="margin: 0; font-size: 15px;">🎮 게임별 실시간 스코어 (개인전)</h3>
                 <div style="display: flex; gap: 6px;">
                     <button class="kakao-share" onclick="shareMatchToKakao()" style="padding: 5px 10px; font-size: 12px;">💬 공유</button>
                     <button class="danger" id="cancelMatchBtn" onclick="cancelMatch()" style="padding: 5px 10px; font-size: 12px; display: none;">🛑 취소</button>
                 </div>
             </div>
 
-            <!-- 관리자용 최초 팀 편성 조작 컨트롤러 -->
+            <!-- 관리자용 최초 팀 편성 조작 컨트롤러 (개인전 선택 시 숨김 처리됨) -->
             <div class="team-mode-bar" id="adminTeamControlPanel" style="display: none; background: #eff6ff; border: 1px solid #bfdbfe;">
                 <div style="font-weight: bold; color: #1e40af; width: 100%;">🛠️ [관리자] 1게임 최초 팀 편성 설정</div>
                 <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%;">
@@ -205,33 +199,34 @@
                 </div>
             </div>
 
-            <div style="background: #f8fafc; border: 1px solid var(--border-color); padding: 10px; border-radius: 8px; margin-bottom: 12px; font-size: 12px;">
+            <div id="teamModeNoticeBox" style="background: #f8fafc; border: 1px solid var(--border-color); padding: 10px; border-radius: 8px; margin-bottom: 12px; font-size: 12px;">
                 📌 팀 편성 기준: <strong id="publishedModeDisplay" style="color:var(--primary-color);">당일 에버리지 기준</strong><br>
                 <span style="font-size: 11px; color: #64748b;">(2게임부터는 직전 게임까지의 누적 점수를 바탕으로 팀이 재편성됩니다.)</span>
             </div>
 
-            <!-- 게임별 선택 탭 (1게임 ~ 4게임별 팀 현황 확인 가능) -->
-            <div style="display: flex; gap: 5px; margin-bottom: 12px;">
+            <!-- 게임별 선택 탭 (팀전일 때만 팀 현황 보기용으로 표시) -->
+            <div id="gameTabContainer" style="display: flex; gap: 5px; margin-bottom: 12px;">
                 <button type="button" class="game-tab-btn secondary" id="gTab1" onclick="switchGameTab(1)" style="flex: 1; padding: 6px; font-size: 12px; background: var(--primary-color);">1게임 보기</button>
                 <button type="button" class="game-tab-btn secondary" id="gTab2" onclick="switchGameTab(2)" style="flex: 1; padding: 6px; font-size: 12px; background: #64748b;">2게임 보기</button>
                 <button type="button" class="game-tab-btn secondary" id="gTab3" onclick="switchGameTab(3)" style="flex: 1; padding: 6px; font-size: 12px; background: #64748b;">3게임 보기</button>
                 <button type="button" class="game-tab-btn secondary" id="gTab4" onclick="switchGameTab(4)" style="flex: 1; padding: 6px; font-size: 12px; background: #64748b;">4게임 보기</button>
             </div>
 
+            <!-- 팀 매칭 박스 영역 (개인전일 경우 숨겨짐) -->
             <div class="teams-grid" id="teamsContainer"></div>
 
             <div style="margin-top: 20px;">
                 <h4 style="font-size: 14px; margin-bottom: 4px;">📝 4게임 스코어 입력</h4>
-                <div style="font-size: 11px; color: #64748b; margin-bottom: 8px;">💡 점수 입력 시 해당 게임에 소속된 실시간 팀 뱃지가 표시됩니다. 가로로 스크롤해도 이름이 고정됩니다.</div>
+                <div style="font-size: 11px; color: #64748b; margin-bottom: 8px;">💡 점수 입력 시 실시간 반영되며, 가로로 스크롤해도 선수명이 고정됩니다.</div>
                 <div style="overflow-x: auto;">
                     <table class="score-table">
                         <thead>
                             <tr>
                                 <th>선수명</th>
-                                <th>1게임 (올커버/팀)</th>
-                                <th>2게임 (올커버/팀)</th>
-                                <th>3게임 (올커버/팀)</th>
-                                <th>4게임 (올커버/팀)</th>
+                                <th id="thG1">1게임 (올커버/팀)</th>
+                                <th id="thG2">2게임 (올커버/팀)</th>
+                                <th id="thG3">3게임 (올커버/팀)</th>
+                                <th id="thG4">4게임 (올커버/팀)</th>
                                 <th>총점</th>
                                 <th>평균</th>
                             </tr>
@@ -256,9 +251,12 @@
 
             <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; font-size: 13px;">
                 <div>
-                    <label for="teamCount" style="font-weight: 600; margin-right: 5px;">팀 수:</label>
-                    <select id="teamCount" style="width: 70px; padding: 6px;" onchange="saveSettings()">
-                        <option value="2">2개</option><option value="3">3개</option><option value="4" selected>4개</option>
+                    <label for="teamCount" style="font-weight: 600; margin-right: 5px;">진행 방식:</label>
+                    <select id="teamCount" style="width: 100px; padding: 6px;" onchange="saveSettings()">
+                        <option value="solo">개인전</option>
+                        <option value="2">2개 팀</option>
+                        <option value="3">3개 팀</option>
+                        <option value="4" selected>4개 팀</option>
                     </select>
                 </div>
                 <div>
@@ -747,19 +745,23 @@
     }
 
     function shareMatchToKakao() {
-        let summaryText = "🎳 [Bowling Connection 정모 현황]\n\n";
-        const teamBoxes = document.querySelectorAll('.team-box');
-        if (teamBoxes.length > 0) {
-            teamBoxes.forEach((box, idx) => {
-                const title = box.querySelector('h3').innerText;
-                const stats = box.querySelector('.team-stats').innerText;
-                summaryText += `📌 ${title} (${stats})\n`;
-                const members = box.querySelectorAll('.team-member');
-                members.forEach(m => { summaryText += `  • ${m.innerText.replace('\n', ': ')}\n`; });
-                summaryText += "\n";
-            });
+        let isSolo = document.getElementById('teamCount').value === 'solo';
+        let summaryText = isSolo ? "🎳 [Bowling Connection 개인전 실시간 현황]\n\n" : "🎳 [Bowling Connection 팀전 정모 현황]\n\n";
+        
+        if (!isSolo) {
+            const teamBoxes = document.querySelectorAll('.team-box');
+            if (teamBoxes.length > 0) {
+                teamBoxes.forEach((box, idx) => {
+                    const title = box.querySelector('h3').innerText;
+                    const stats = box.querySelector('.team-stats').innerText;
+                    summaryText += `📌 ${title} (${stats})\n`;
+                    const members = box.querySelectorAll('.team-member');
+                    members.forEach(m => { summaryText += `  • ${m.innerText.replace('\n', ': ')}\n`; });
+                    summaryText += "\n";
+                });
+            }
         } else {
-            summaryText += "현재 진행 중인 팀 매칭 정보가 없습니다.";
+            summaryText += "개인전 모드로 진행 중입니다.\n";
         }
         
         if (navigator.share) {
@@ -781,7 +783,7 @@
         if (navigator.share) {
             navigator.share({ title: '정모 결과', text: text.trim() }).catch(() => {});
         } else {
-            navigator.clipboard.writeText(text.trim()).then(() => alert("정모 결과(1~4게임 세부점수)가 복사되었습니다!"));
+            navigator.clipboard.writeText(text.trim()).then(() => alert("정모 결과가 복사되었습니다!"));
         }
     }
 
@@ -816,7 +818,7 @@
                     link.download = `정모결과_${id}.png`;
                     link.href = canvas.toDataURL('image/png');
                     link.click();
-                    alert('사진이 갤러리(다운로드)에 저장되었습니다!');
+                    alert('사진이 저장되었습니다!');
                 }
             }, 'image/png');
         } catch (err) {
@@ -870,6 +872,8 @@
         const cancelMatchBtn = document.getElementById('cancelMatchBtn');
         const adminTeamControlPanel = document.getElementById('adminTeamControlPanel');
 
+        let isSolo = document.getElementById('teamCount').value === 'solo';
+
         if (isAdmin) {
             indicator.innerText = "👑 관리자";
             indicator.style.color = "#16a34a";
@@ -878,7 +882,7 @@
             adminDBControlCard.style.display = 'block';
             if(saveRecordContainer) saveRecordContainer.style.display = 'block';
             if(cancelMatchBtn) cancelMatchBtn.style.display = 'inline-block';
-            if(adminTeamControlPanel) adminTeamControlPanel.style.display = 'block';
+            if(adminTeamControlPanel) adminTeamControlPanel.style.display = isSolo ? 'none' : 'block';
         } else {
             indicator.innerText = "👤 일반 회원";
             indicator.style.color = "var(--primary-color)";
@@ -893,7 +897,10 @@
 
     function syncPlayersToDB() { db.ref('bowling_players').set(players); }
     function syncHistoryToDB() { db.ref('bowling_history').set(history); }
-    function saveSettings() { db.ref('bowling_teamCount').set(document.getElementById('teamCount').value); }
+    function saveSettings() { 
+        db.ref('bowling_teamCount').set(document.getElementById('teamCount').value);
+        updateAuthUI();
+    }
 
     function checkPasswordAndExecute(callback) {
         if (isAdmin) { callback(); return; }
@@ -941,7 +948,7 @@
                 btn.style.background = (i === gameNum) ? 'var(--primary-color)' : '#64748b';
             }
         }
-        computeAndRenderTeams(); // 탭을 전환하면 해당 게임 번호에 맞춰 팀을 재정렬함
+        computeAndRenderTeams();
     }
 
     document.getElementById('playerName').addEventListener('keypress', function(e) { if (e.key === 'Enter') document.getElementById('playerScore').focus(); });
@@ -1127,7 +1134,7 @@
 
     function initMatch() {
         const activePlayers = players.filter(p => p.checked);
-        if (activePlayers.length < 2) return alert('최소 2명 이상 체크해주세요.');
+        if (activePlayers.length < 1) return alert('최소 1명 이상 체크해주세요.');
         
         let initialSettings = { 
             mode: 'current', 
@@ -1160,9 +1167,11 @@
         document.getElementById('publishedModeDisplay').innerText = text;
     }
 
-    // 각 게임별(1, 2, 3, 4)로 점수를 합산하여 독립적인 팀 배정을 계산하는 함수
     function calculateTeamsForGame(gameNum) {
-        const teamCount = parseInt(document.getElementById('teamCount').value) || 4;
+        const teamCountVal = document.getElementById('teamCount').value;
+        if (teamCountVal === 'solo') return []; // 개인전일 경우 팀 계산 안 함
+
+        const teamCount = parseInt(teamCountVal) || 4;
         const mode = publishedTeamSettings.mode || 'current';
         const startMonth = publishedTeamSettings.startMonth || 'all';
         const endMonth = publishedTeamSettings.endMonth || 'all';
@@ -1170,21 +1179,18 @@
         let evalPlayers = matchResults.map(p => {
             let score = 0;
             if (gameNum === 1) {
-                // 1게임은 기초 점수(명부의 수동/자동 점수)를 기준으로 정렬
                 score = p.score;
                 if (mode === 'history') {
                     const avgVal = calculateMemberAvgForRange(p.name, startMonth, endMonth);
                     if (avgVal !== null) score = avgVal;
                 }
             } else {
-                // 2, 3, 4게임은 이전 게임들의 평균 점수로 재정렬
                 let sum = 0, count = 0;
                 let pLive = liveScores[p.id] || {};
                 for (let g = 1; g < gameNum; g++) {
                     let s = parseFloat(pLive[`g${g}`]);
                     if (!isNaN(s) && s > 0) { sum += s; count++; }
                 }
-                // 이전 게임 점수가 비어있다면 1게임 기준 점수를 그대로 가져와서 폴백 처리
                 if (count === 0) {
                     score = p.score;
                     if (mode === 'history') {
@@ -1198,7 +1204,6 @@
             return { ...p, sortingScore: score };
         });
 
-        // 점수 높은 순서대로 내림차순 정렬
         evalPlayers.sort((a, b) => b.sortingScore - a.sortingScore);
 
         let teams = Array.from({ length: teamCount }, () => ({ memberIds: new Set(), members: [], totalScore: 0, liveSumScore: 0 }));
@@ -1206,10 +1211,8 @@
         evalPlayers.forEach((player, index) => {
             let tIdx = 0;
             if (index < teamCount) {
-                // 1라운드는 1,2,3,4 순
                 tIdx = index;
             } else {
-                // 2라운드부터는 팀 기준총점이 가장 낮은 곳 우선 배정 (스네이크 밸런스 패치)
                 let minScore = Math.min(...teams.map(t => t.totalScore));
                 tIdx = teams.findIndex(t => t.totalScore === minScore);
             }
@@ -1227,9 +1230,38 @@
     }
 
     function computeAndRenderTeams() {
-        // 1. 선택된 현재 탭(currentGameTab)의 팀 편성 정보만 렌더링
-        let currentTeams = calculateTeamsForGame(currentGameTab);
+        const isSolo = document.getElementById('teamCount').value === 'solo';
         
+        // UI 요소 표시/숨김 제어
+        document.getElementById('teamsContainer').style.display = isSolo ? 'none' : 'grid';
+        document.getElementById('gameTabContainer').style.display = isSolo ? 'none' : 'flex';
+        document.getElementById('teamModeNoticeBox').style.display = isSolo ? 'none' : 'block';
+        document.getElementById('resultCardTitle').innerText = isSolo ? '🎮 게임별 실시간 스코어 (개인전)' : '🎮 게임별 실시간 팀 매칭 & 스코어';
+
+        if (isSolo) {
+            // 개인전일 때 테이블 헤더 및 뱃지 처리
+            for (let g = 1; g <= 4; g++) {
+                document.getElementById(`thG1`).innerText = '1게임 (올커버)';
+                document.getElementById(`thG2`).innerText = '2게임 (올커버)';
+                document.getElementById(`thG3`).innerText = '3게임 (올커버)';
+                document.getElementById(`thG4`).innerText = '4게임 (올커버)';
+            }
+            matchResults.forEach(p => {
+                for (let g = 1; g <= 4; g++) {
+                    let badgeElem = document.getElementById(`team_badge_g${g}_${p.id}`);
+                    if (badgeElem) badgeElem.style.display = 'none';
+                }
+            });
+            return;
+        }
+
+        // 팀전일 때
+        document.getElementById(`thG1`).innerText = '1게임 (올커버/팀)';
+        document.getElementById(`thG2`).innerText = '2게임 (올커버/팀)';
+        document.getElementById(`thG3`).innerText = '3게임 (올커버/팀)';
+        document.getElementById(`thG4`).innerText = '4게임 (올커버/팀)';
+
+        let currentTeams = calculateTeamsForGame(currentGameTab);
         const uniqueLiveScores = [...new Set(currentTeams.map(t => t.liveSumScore))].sort((a, b) => b - a);
 
         document.getElementById('teamsContainer').innerHTML = currentTeams.map((team, idx) => {
@@ -1257,7 +1289,6 @@
                 </div>`;
         }).join('');
 
-        // 2. 전체 스코어 테이블 내의 뱃지(1~4게임 전체)도 각각의 팀 편성 정보로 맞춤 업데이트
         for (let g = 1; g <= 4; g++) {
             let gTeams = calculateTeamsForGame(g);
             matchResults.forEach(p => {
@@ -1266,6 +1297,7 @@
                 
                 let badgeElem = document.getElementById(`team_badge_g${g}_${p.id}`);
                 if (badgeElem) {
+                    badgeElem.style.display = 'inline-block';
                     badgeElem.innerText = `[팀 ${assignedTeam}]`;
                     badgeElem.className = `team-badge team-badge-${assignedTeam}`;
                 }
@@ -1275,6 +1307,8 @@
 
     function renderScoreTable(activePlayers) {
         matchResults = activePlayers;
+        const isSolo = document.getElementById('teamCount').value === 'solo';
+
         document.getElementById('scoreTableBody').innerHTML = activePlayers.map(p => `
             <tr>
                 <td style="font-weight: 600; font-size:13px;">${p.name} ${p.isDummy ? '(더미)' : ''}</td>
@@ -1285,7 +1319,7 @@
                                 <input type="number" class="score-input" data-id="${p.id}" data-game="${g}" oninput="onScoreChange(${p.id})">
                                 <label style="font-size:10px; cursor:pointer;"><input type="checkbox" class="cover-checkbox" data-id="${p.id}" data-game="${g}" onchange="onScoreChange(${p.id})">올커버</label>
                             </div>
-                            <span id="team_badge_g${g}_${p.id}" class="team-badge team-badge-1">[팀 1]</span>
+                            <span id="team_badge_g${g}_${p.id}" class="team-badge team-badge-1" style="${isSolo ? 'display:none;' : ''}">[팀 1]</span>
                         </div>
                     </td>
                 `).join('')}
