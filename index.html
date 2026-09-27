@@ -13,8 +13,12 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <!-- Firebase 코어 및 데이터베이스 -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <!-- Firebase 인증(Auth) 라이브러리 -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 
     <style>
         :root {
@@ -33,7 +37,9 @@
         .auth-card h2 { margin-top: 0; color: var(--primary-color); margin-bottom: 10px; font-size: 22px; }
         .auth-card p { font-size: 13px; color: #64748b; margin-bottom: 20px; line-height: 1.5; }
         
-        .kakao-btn { width: 100%; padding: 12px; font-size: 15px; background-color: #fee500; color: #191919; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        /* 구글 로그인 버튼 스타일 */
+        .google-btn { width: 100%; padding: 12px; font-size: 15px; background-color: #ffffff; color: #3c4043; border: 1px solid #dadce0; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3); transition: background-color 0.2s; }
+        .google-btn:hover { background-color: #f8f9fa; }
 
         .header-box { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 15px; flex-wrap: wrap; }
         .club-logo { width: 55px; height: 55px; object-fit: contain; border-radius: 50%; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); background: white; padding: 3px; border: 2px solid var(--border-color); }
@@ -134,18 +140,18 @@
     <div id="authOverlay">
         <div class="auth-card" id="loginCardView">
             <h2>🎳 Connection</h2>
-            <p>클럽 회원 전용 시스템입니다.<br>본인의 이름과 클럽 인증번호를 입력해 주세요.</p>
-            <button class="kakao-btn" onclick="loginWithRealNameInput()">
-                <svg width="16" height="16" viewBox="0 0 18 18" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M9 1C4.58172 1 1 3.79086 1 7.21543C1 9.42055 2.45492 11.352 4.67389 12.4571L3.79159 15.7287C3.69992 16.068 4.08588 16.3263 4.37257 16.1264L8.47225 13.3328C8.64718 13.3444 8.82315 13.3503 10 13.3503C14.4183 13.3503 18 10.5594 18 7.13486C18 3.71029 14.4183 1 10 1Z" fill="#191919"/></svg>
-                회원 이름으로 로그인 / 가입 신청
+            <p>클럽 회원 전용 시스템입니다.<br>최초 1회 구글 계정 연동이 필요합니다.</p>
+            <button class="google-btn" onclick="loginWithGoogle()">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" height="18" alt="Google Logo">
+                구글 계정으로 로그인 / 가입 신청
             </button>
-            <button onclick="loginAsAdminPrompt()" style="margin-top: 10px; width: 100%; background: #475569; font-size: 13px; padding: 10px; border-radius: 8px; border:none; color:white; font-weight:600; cursor:pointer;">🔑 관리자 직접 로그인 (비밀번호)</button>
+            <button onclick="loginAsAdminPrompt()" style="margin-top: 15px; width: 100%; background: #475569; font-size: 13px; padding: 10px; border-radius: 8px; border:none; color:white; font-weight:600; cursor:pointer;">🔑 관리자 직접 로그인 (비밀번호)</button>
         </div>
 
         <div class="auth-card" id="pendingCardView" style="display: none;">
             <h2>⏳ 가입 승인 대기 중</h2>
             <p><strong id="pendingNameDisplay" style="color:var(--primary-color);"></strong>님 환영합니다!<br><br>클럽 관리자의 가입 승인을 기다리고 있습니다. 승인이 완료되면 자동으로 입장이 가능해집니다.</p>
-            <button class="secondary" onclick="logoutSession()" style="width: 100%; margin-top: 8px; padding: 10px; font-size: 13px;">다른 이름으로 변경</button>
+            <button class="secondary" onclick="logoutSession()" style="width: 100%; margin-top: 8px; padding: 10px; font-size: 13px;">로그아웃 (다른 계정)</button>
             <button onclick="loginAsAdminPrompt()" style="margin-top: 10px; width: 100%; background: #475569; font-size: 13px; padding: 10px; border-radius: 8px; border:none; color:white; font-weight:600; cursor:pointer;">🔑 관리자 직접 로그인 (비밀번호)</button>
         </div>
     </div>
@@ -182,7 +188,7 @@
                 </div>
             </div>
 
-            <!-- 관리자용 최초 팀 편성 조작 컨트롤러 (개인전 선택 시 숨김 처리됨) -->
+            <!-- 관리자용 최초 팀 편성 조작 컨트롤러 -->
             <div class="team-mode-bar" id="adminTeamControlPanel" style="display: none; background: #eff6ff; border: 1px solid #bfdbfe;">
                 <div style="font-weight: bold; color: #1e40af; width: 100%;">🛠️ [관리자] 1게임 최초 팀 편성 설정</div>
                 <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%;">
@@ -201,10 +207,9 @@
 
             <div id="teamModeNoticeBox" style="background: #f8fafc; border: 1px solid var(--border-color); padding: 10px; border-radius: 8px; margin-bottom: 12px; font-size: 12px;">
                 📌 팀 편성 기준: <strong id="publishedModeDisplay" style="color:var(--primary-color);">당일 에버리지 기준</strong><br>
-                <span style="font-size: 11px; color: #64748b;">(2게임부터는 직전 게임까지의 누적 점수를 바탕으로 팀이 재편성됩니다.)</span>
+                <span style="font-size: 11px; color: #64748b;">(2게임부터는 직전 게임 단독 점수를 바탕으로 팀이 재편성됩니다.)</span>
             </div>
 
-            <!-- 게임별 선택 탭 (팀전일 때만 팀 현황 보기용으로 표시) -->
             <div id="gameTabContainer" style="display: flex; gap: 5px; margin-bottom: 12px;">
                 <button type="button" class="game-tab-btn secondary" id="gTab1" onclick="switchGameTab(1)" style="flex: 1; padding: 6px; font-size: 12px; background: var(--primary-color);">1게임 보기</button>
                 <button type="button" class="game-tab-btn secondary" id="gTab2" onclick="switchGameTab(2)" style="flex: 1; padding: 6px; font-size: 12px; background: #64748b;">2게임 보기</button>
@@ -212,7 +217,6 @@
                 <button type="button" class="game-tab-btn secondary" id="gTab4" onclick="switchGameTab(4)" style="flex: 1; padding: 6px; font-size: 12px; background: #64748b;">4게임 보기</button>
             </div>
 
-            <!-- 팀 매칭 박스 영역 (개인전일 경우 숨겨짐) -->
             <div class="teams-grid" id="teamsContainer"></div>
 
             <div style="margin-top: 20px;">
@@ -259,7 +263,6 @@
                         <option value="4" selected>4개 팀</option>
                     </select>
                 </div>
-                <!-- 🎯 기준 에버 범위 설정 영역으로 원복됨 -->
                 <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
                     <label style="font-weight: 600; margin-right: 2px;">📅 기준 에버:</label>
                     <select id="targetStartMonthSelect" onchange="refreshPlayerScoresByMonth()" style="padding: 6px; font-weight: 600; color: var(--primary-color); min-width: 70px;"></select>
@@ -490,55 +493,64 @@
     let attendanceChartInstance = null;
     let indivAvgChartInstance = null;
 
-    function loginWithRealNameInput() {
-        const inputCode = prompt("클럽 인증번호를 입력해주세요:");
-        if (inputCode === null) return;
+    // 🚀 팝업 방식으로 구글 로그인 (로컬 서버 및 모바일 호환 안정적)
+    function loginWithGoogle() {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        firebase.auth().signInWithPopup(provider).catch((error) => {
+            console.error("로그인 에러:", error);
+            alert("로그인 중 오류가 발생했습니다: " + error.message);
+        });
+    }
+
+    function registerNewGoogleUser(uid, defaultName) {
+        const inputCode = prompt("클럽 가입 인증번호를 입력해주세요:");
+        if (inputCode === null) { firebase.auth().signOut(); return; }
         if (inputCode.trim() !== clubJoinPassword) {
-            return alert("클럽 인증번호가 올바르지 않습니다.");
+            alert("클럽 인증번호가 올바르지 않습니다.");
+            firebase.auth().signOut();
+            return;
         }
 
-        const name = prompt("본인의 클럽 회원 이름을 정확히 입력해주세요:");
-        if (!name) return;
+        const name = prompt("본인의 클럽 회원 이름을 정확히 입력해주세요:", defaultName || "");
+        if (!name || !name.trim()) { firebase.auth().signOut(); return; }
+        
         const cleanName = name.trim();
-        if (!cleanName) return;
-
-        const uniqueId = 'user_' + Date.now();
-        currentUser = { id: uniqueId, name: cleanName };
-        localStorage.setItem('connection_user_id', uniqueId);
-        localStorage.setItem('connection_user_name', cleanName);
-
-        db.ref('bowling_approvedKakaoIds').once('value', (snap) => {
-            const approved = snap.val() || {};
-            const isAlreadyApproved = Object.values(approved).includes(cleanName);
-            
-            if (isAlreadyApproved) {
-                for (let [id, appName] of Object.entries(approved)) {
-                    if (appName === cleanName) {
-                        localStorage.setItem('connection_user_id', id);
-                        currentUser.id = id;
-                        break;
-                    }
-                }
-                checkAuthAndRender();
-            } else {
-                db.ref('bowling_pendingApprovals/' + uniqueId).set({
-                    name: cleanName,
-                    requestedAt: new Date().toLocaleString()
-                }).then(() => {
-                    checkAuthAndRender();
-                });
-            }
+        db.ref('bowling_pendingApprovals/' + uid).set({
+            name: cleanName,
+            requestedAt: new Date().toLocaleString()
+        }).then(() => {
+            currentUser = { id: uid, name: cleanName };
+            checkAuthAndRender();
         });
     }
 
     window.onload = async function() {
-        const savedId = localStorage.getItem('connection_user_id');
-        const savedName = localStorage.getItem('connection_user_name');
-
-        if (savedId && savedName) {
-            currentUser = { id: savedId, name: savedName };
-            if (savedId === 'admin_master') isAdmin = true;
-        }
+        firebase.auth().onAuthStateChanged((user) => {
+            if (user) {
+                const uid = user.uid;
+                db.ref('bowling_approvedKakaoIds/' + uid).once('value').then((snap) => {
+                    const approvedName = snap.val();
+                    if (approvedName) {
+                        currentUser = { id: uid, name: approvedName };
+                        checkAuthAndRender();
+                    } else {
+                        db.ref('bowling_pendingApprovals/' + uid).once('value').then((pSnap) => {
+                            if (pSnap.exists()) {
+                                currentUser = { id: uid, name: pSnap.val().name };
+                                checkAuthAndRender();
+                            } else {
+                                registerNewGoogleUser(uid, user.displayName);
+                            }
+                        });
+                    }
+                });
+            } else {
+                if (currentUser && currentUser.id !== 'admin_master') {
+                    currentUser = null;
+                    checkAuthAndRender();
+                }
+            }
+        });
 
         db.ref('bowling_clubJoinPassword').on('value', (snapshot) => {
             const pwd = snapshot.val();
@@ -547,12 +559,12 @@
 
         db.ref('bowling_approvedKakaoIds').on('value', (snapshot) => {
             approvedKakaoIds = snapshot.val() || {};
-            checkAuthAndRender();
+            if (currentUser && currentUser.id !== 'admin_master') checkAuthAndRender();
         });
 
         db.ref('bowling_pendingApprovals').on('value', (snapshot) => {
             pendingApprovals = snapshot.val() || {};
-            checkAuthAndRender();
+            if (currentUser && currentUser.id !== 'admin_master') checkAuthAndRender();
             renderPendingApprovals();
         });
 
@@ -638,8 +650,6 @@
         if (inputPwd === adminPassword) {
             isAdmin = true;
             currentUser = { id: 'admin_master', name: '관리자' };
-            localStorage.setItem('connection_user_id', 'admin_master');
-            localStorage.setItem('connection_user_name', '관리자');
             alert("관리자 권한으로 로그인되었습니다.");
             checkAuthAndRender();
             updateAuthUI();
@@ -649,11 +659,11 @@
     }
 
     function logoutSession() {
-        localStorage.removeItem('connection_user_id');
-        localStorage.removeItem('connection_user_name');
-        isAdmin = false;
-        currentUser = null;
-        location.reload();
+        firebase.auth().signOut().then(() => {
+            isAdmin = false;
+            currentUser = null;
+            location.reload();
+        });
     }
 
     function checkAuthAndRender() {
@@ -970,7 +980,6 @@
         return count > 0 ? parseFloat((totalSum / count).toFixed(1)) : null;
     }
 
-    // 🎯 단일 선택 대신 시작/종료 범위를 선택할 수 있도록 수정
     function populateTargetMonthSelect() {
         const startSelect = document.getElementById('targetStartMonthSelect');
         const endSelect = document.getElementById('targetEndMonthSelect');
@@ -1073,7 +1082,6 @@
         endSelect.value = sortedMonths.includes(endVal) ? endVal : sortedMonths[sortedMonths.length - 1];
     }
 
-    // 🎯 범위 설정을 반영하여 점수 갱신
     function refreshPlayerScoresByMonth() {
         const startMonth = document.getElementById('targetStartMonthSelect').value;
         const endMonth = document.getElementById('targetEndMonthSelect').value;
@@ -1187,9 +1195,10 @@
         document.getElementById('publishedModeDisplay').innerText = text;
     }
 
+    // 🚀 수정된 팀 점수 기준 로직: 누적 평균이 아니라 '바로 직전 게임 단독 점수' 사용
     function calculateTeamsForGame(gameNum) {
         const teamCountVal = document.getElementById('teamCount').value;
-        if (teamCountVal === 'solo') return []; // 개인전일 경우 팀 계산 안 함
+        if (teamCountVal === 'solo') return []; 
 
         const teamCount = parseInt(teamCountVal) || 4;
         const mode = publishedTeamSettings.mode || 'current';
@@ -1205,20 +1214,18 @@
                     if (avgVal !== null) score = avgVal;
                 }
             } else {
-                let sum = 0, count = 0;
+                let prevGameNum = gameNum - 1;
                 let pLive = liveScores[p.id] || {};
-                for (let g = 1; g < gameNum; g++) {
-                    let s = parseFloat(pLive[`g${g}`]);
-                    if (!isNaN(s) && s > 0) { sum += s; count++; }
-                }
-                if (count === 0) {
+                let prevScore = parseFloat(pLive[`g${prevGameNum}`]);
+
+                if (!isNaN(prevScore) && prevScore > 0) {
+                    score = prevScore; // 바로 직전 게임 점수를 그대로 기준 점수로 사용
+                } else {
                     score = p.score;
                     if (mode === 'history') {
                         const avgVal = calculateMemberAvgForRange(p.name, startMonth, endMonth);
                         if (avgVal !== null) score = avgVal;
                     }
-                } else {
-                    score = parseFloat((sum / count).toFixed(1));
                 }
             }
             return { ...p, sortingScore: score };
@@ -1252,14 +1259,12 @@
     function computeAndRenderTeams() {
         const isSolo = document.getElementById('teamCount').value === 'solo';
         
-        // UI 요소 표시/숨김 제어
         document.getElementById('teamsContainer').style.display = isSolo ? 'none' : 'grid';
         document.getElementById('gameTabContainer').style.display = isSolo ? 'none' : 'flex';
         document.getElementById('teamModeNoticeBox').style.display = isSolo ? 'none' : 'block';
         document.getElementById('resultCardTitle').innerText = isSolo ? '🎮 게임별 실시간 스코어 (개인전)' : '🎮 게임별 실시간 팀 매칭 & 스코어';
 
         if (isSolo) {
-            // 개인전일 때 테이블 헤더 및 뱃지 처리
             for (let g = 1; g <= 4; g++) {
                 document.getElementById(`thG1`).innerText = '1게임 (올커버)';
                 document.getElementById(`thG2`).innerText = '2게임 (올커버)';
@@ -1275,7 +1280,6 @@
             return;
         }
 
-        // 팀전일 때
         document.getElementById(`thG1`).innerText = '1게임 (올커버/팀)';
         document.getElementById(`thG2`).innerText = '2게임 (올커버/팀)';
         document.getElementById(`thG3`).innerText = '3게임 (올커버/팀)';
@@ -1296,12 +1300,12 @@
             return `
                 <div class="team-box ${rankClass}">
                     <h3>팀 ${idx + 1} <span style="font-size:12px;">(${currentGameTab}G 합산: ${team.liveSumScore})</span></h3>
-                    <div class="team-stats">기준총점: ${team.totalScore.toFixed(1)} | 평균: ${avg}</div>
+                    <div class="team-stats">기준점수 합계: ${team.totalScore.toFixed(1)} | 평균: ${avg}</div>
                     <div>${team.members.map(m => `
                         <div class="team-member">
                             <span>${m.name}</span>
                             <span style="display: flex; gap: 6px; align-items: center;">
-                                <span style="font-size: 11px; color: #64748b;">(기준:${m.sortingScore})</span>
+                                <span style="font-size: 11px; color: #64748b;">(직전:${m.sortingScore})</span>
                                 <strong style="color: var(--primary-color); font-size: 13px;">${m.displayGameScore > 0 ? m.displayGameScore + '점' : '-'}</strong>
                             </span>
                         </div>`).join('')}
