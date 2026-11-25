@@ -176,6 +176,8 @@
         .auth-bar { display: flex; justify-content: space-between; align-items: center; background: #e2e8f0; padding: 6px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 12px; flex-wrap: wrap; gap: 6px; }
         .notice-banner { text-align: center; padding: 20px; background: #f1f5f9; border-radius: 10px; color: #475569; font-size: 14px; font-weight: 600; }
         .notice-feed-item { background: #f8fafc; border-left: 4px solid var(--primary-color); padding: 10px 12px; border-radius: 6px; margin-bottom: 8px; font-size: 13px; }
+        .notice-feed-img { max-width: 100%; max-height: 280px; border-radius: 8px; margin-top: 8px; border: 1px solid var(--border-color); object-fit: contain; cursor: pointer; display: block; }
+        .notice-edit-box { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; padding: 10px; margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
         
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; padding: 15px; box-sizing: border-box; }
         .modal-content { background: white; padding: 20px; border-radius: 12px; width: 100%; max-width: 450px; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
@@ -378,6 +380,14 @@
                     <input type="text" id="noticeTitle" placeholder="제목 (예: 11월 4주차 정기모임 안내)" style="flex: 1; min-width: 180px;">
                 </div>
                 <textarea id="noticeBody" rows="3" placeholder="내용을 입력하세요 (일시, 볼링장, 오일 패턴, 전달사항 등)"></textarea>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: #ffffff; border: 1px dashed #93c5fd; padding: 8px 10px; border-radius: 8px; font-size: 12px; color: #334155;">
+                    <span>🖼️ <strong>사진 첨부:</strong> 이 영역이나 작성 칸에 <strong>Ctrl+V</strong>로 붙여넣거나 파일 선택</span>
+                    <input type="file" id="noticeImageFile" accept="image/*" style="width: auto; max-width: 210px; font-size: 11px; padding: 4px;" onchange="handleNoticeImageFile(this)">
+                    <button type="button" class="secondary" onclick="clearNoticeDraftImage()" style="padding: 4px 8px; font-size: 11px;">사진 지우기</button>
+                </div>
+                <div id="noticeDraftImagePreviewBox" style="display: none; position: relative; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; text-align: center;">
+                    <img id="noticeDraftImagePreview" src="" alt="첨부 미리보기" style="max-width: 100%; max-height: 220px; border-radius: 6px; object-fit: contain;">
+                </div>
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                     <label style="font-size: 12px; color: #1e40af; cursor: pointer; display: flex; align-items: center; gap: 4px;">
                         <input type="checkbox" id="sendNoticePushChk" checked style="width: 15px; height: 15px;"> 등록 즉시 전체 회원에게 푸시 알림 보내기
@@ -672,618 +682,122 @@
     let approvedUsers = {};
     let subAdmins = {};
     let clubNotices = [];
-    let pushConfig = { gasUrl: '', pushSecret: '', vapidKey: '' };
-    let currentTeamCount = "4"; 
-    let isAdmin = false;
-    let isSuperAdmin = false;
-    let currentUser = null;
-    
-    let prevCustomTeamSpinnerVal = null;
-    let lastPushSentAt = 0;
+    let draftNoticeImageData = '';
+    let editingNoticeId = null;
+    let editingNoticeImageData = '';
 
-    let allPlayerNames = []; 
-    let visibleHistoryCount = 3; 
-    let isPlayerListExpanded = false;
-    let currentGameTab = 1;
-    let editingHistoryIds = new Set();
-    let draftHistoryAdditions = {};
-    let draftHistoryDeletions = {};
-    
-    let currentSortColumn = 'avg';
-    let currentSortDirection = 'desc';
-    
-    let teamAvgChartInstance = null;
-    let attendanceChartInstance = null;
-    let indivAvgChartInstance = null;
-
-    function escapeHtml(str) {
-        return String(str || '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
-
-    function isMemberHidden(name) {
-        if (!name || !hiddenStatMembers) return false;
-        const clean = String(name).trim();
-        if (hiddenStatMembers[clean] === true || hiddenStatMembers[name] === true) return true;
-        return Object.keys(hiddenStatMembers).some(k => hiddenStatMembers[k] === true && k.trim() === clean);
-    }
-
-    function hasAdminPrivilege(user) {
-        if (!user) return false;
-        const emailLower = String(user.email || '').toLowerCase();
-        if (PRIMARY_ADMIN_EMAILS.includes(emailLower)) return true;
-        if (user.uid && subAdmins && subAdmins[user.uid] === true) return true;
-        return false;
-    }
-
-    function checkPrimaryAdmin(user) {
-        if (!user || !user.email) return false;
-        return PRIMARY_ADMIN_EMAILS.includes(String(user.email).toLowerCase());
-    }
-
-    function getAccurateRecordStats(r) {
-        const g1 = parseFloat(r.g1) || 0;
-        const g2 = parseFloat(r.g2) || 0;
-        const g3 = parseFloat(r.g3) || 0;
-        const g4 = parseFloat(r.g4) || 0;
-        const total = g1 + g2 + g3 + g4;
-        const validGames = (g1 > 0 ? 1 : 0) + (g2 > 0 ? 1 : 0) + (g3 > 0 ? 1 : 0) + (g4 > 0 ? 1 : 0);
-        const avg = validGames > 0 ? parseFloat((total / validGames).toFixed(1)) : 0;
-        return { total, avg, validGames };
-    }
-
-    function normalizeAllHistoryDB(silent = false) {
-        if (!isAdmin) return;
-        let changedCount = 0;
-        history.forEach(h => {
-            if (!Array.isArray(h.records)) return;
-            h.records.forEach(r => {
-                const stats = getAccurateRecordStats(r);
-                const newAvgStr = stats.avg.toFixed(1);
-                if (Number(r.total) !== stats.total || String(r.avg) !== newAvgStr) {
-                    r.total = stats.total;
-                    r.avg = newAvgStr;
-                    changedCount++;
-                }
-            });
-            h.records.sort((a, b) => b.total - a.total);
-        });
-
-        if (changedCount > 0) {
-            syncHistoryToDB();
-            if (!silent) alert(`총 ${changedCount}건의 과거 기록 에버리지 및 총점이 DB에 일괄 교정되었습니다.`);
-        } else if (!silent) {
-            alert('모든 DB 기록이 이미 최신 계산식과 일치합니다.');
-        }
-    }
-
-    function loginWithGoogle() {
-        const provider = new firebase.auth.GoogleAuthProvider();
-        firebase.auth().signInWithPopup(provider).catch((error) => {
-            console.error("로그인 에러:", error);
-            alert("로그인 중 오류가 발생했습니다: " + error.message);
-        });
-    }
-
-    function registerNewGoogleUser(user) {
-        const name = prompt("본인의 클럽 회원 이름을 정확히 입력해주세요:\n(입력 후 관리자가 승인하면 즉시 입장됩니다)", user.displayName || "");
-        if (!name || !name.trim()) { firebase.auth().signOut(); return; }
-        
-        const cleanName = name.trim().slice(0, 20);
-        db.ref('bowling_pendingApprovals/' + user.uid).set({
-            name: cleanName,
-            email: user.email || '',
-            requestedAt: new Date().toLocaleString()
-        }).then(() => {
-            currentUser = { uid: user.uid, id: user.uid, name: cleanName, email: user.email || '' };
-            checkAuthAndRender();
-        });
-    }
-
-    function checkExistingPushTokenStatus(uid) {
-        if (!uid) return;
-        db.ref(`bowling_fcmTokens/${uid}`).once('value').then((snap) => {
-            const btn = document.getElementById('pushEnableBtn');
-            if (!btn) return;
-            if (snap.exists() && snap.val().token && Notification.permission === 'granted') {
-                btn.innerText = '🔔 알림 설정됨';
-                btn.style.background = '#16a34a';
-                initForegroundPushListener();
-            } else {
-                btn.innerText = '🔔 알림 허용';
-                btn.style.background = '#0284c7';
+    function compressImageToDataUrl(file, maxWidth = 800, quality = 0.72) {
+        return new Promise((resolve, reject) => {
+            if (!file || !file.type || !file.type.startsWith('image/')) {
+                reject(new Error('이미지 파일만 첨부할 수 있습니다.'));
+                return;
             }
-        });
-    }
-
-    window.onload = async function() {
-        initForegroundPushListener();
-
-        firebase.auth().onAuthStateChanged((user) => {
-            if (user) {
-                const uid = user.uid;
-                const email = user.email || '';
-                isSuperAdmin = checkPrimaryAdmin(user);
-
-                db.ref('bowling_approvedKakaoIds/' + uid).once('value').then((snap) => {
-                    const approvedName = snap.val();
-                    if (isSuperAdmin) {
-                        const displayName = approvedName || user.displayName || '기본 관리자';
-                        if (!approvedName) {
-                            db.ref('bowling_approvedKakaoIds/' + uid).set(displayName);
-                        }
-                        currentUser = { uid, id: uid, name: displayName, email };
-                        isAdmin = true;
-                        checkAuthAndRender();
-                        checkExistingPushTokenStatus(uid);
-                    } else if (approvedName) {
-                        currentUser = { uid, id: uid, name: approvedName, email };
-                        isAdmin = hasAdminPrivilege(currentUser);
-                        checkAuthAndRender();
-                        checkExistingPushTokenStatus(uid);
-                    } else {
-                        db.ref('bowling_pendingApprovals/' + uid).once('value').then((pSnap) => {
-                            if (pSnap.exists()) {
-                                currentUser = { uid, id: uid, name: pSnap.val().name, email };
-                                checkAuthAndRender();
-                            } else {
-                                registerNewGoogleUser(user);
-                            }
-                        });
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = new Image();
+                img.onload = () => {
+                    let w = img.width;
+                    let h = img.height;
+                    if (w > maxWidth) {
+                        h = Math.round((h * maxWidth) / w);
+                        w = maxWidth;
                     }
-                });
-            } else {
-                currentUser = null;
-                isAdmin = false;
-                isSuperAdmin = false;
-                checkAuthAndRender();
-            }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                };
+                img.onerror = () => reject(new Error('이미지를 불러올 수 없습니다.'));
+                img.src = ev.target.result;
+            };
+            reader.onerror = () => reject(new Error('파일 읽기 실패'));
+            reader.readAsDataURL(file);
         });
+    }
 
-        db.ref('bowling_approvedKakaoIds').on('value', (snapshot) => {
-            approvedUsers = snapshot.val() || {};
-            if (currentUser) checkAuthAndRender();
-        });
+    function setDraftNoticeImage(dataUrl) {
+        draftNoticeImageData = dataUrl || '';
+        const box = document.getElementById('noticeDraftImagePreviewBox');
+        const img = document.getElementById('noticeDraftImagePreview');
+        if (!box || !img) return;
+        if (draftNoticeImageData) {
+            img.src = draftNoticeImageData;
+            box.style.display = 'block';
+        } else {
+            img.src = '';
+            box.style.display = 'none';
+        }
+    }
 
-        db.ref('bowling_admins').on('value', (snapshot) => {
-            subAdmins = snapshot.val() || {};
-            if (currentUser) {
-                if (!hasAdminPrivilege(currentUser)) isAdmin = false;
-                checkAuthAndRender();
-            }
-        });
+    function clearNoticeDraftImage() {
+        setDraftNoticeImage('');
+        const fileInp = document.getElementById('noticeImageFile');
+        if (fileInp) fileInp.value = '';
+    }
 
-        db.ref('bowling_pendingApprovals').on('value', (snapshot) => {
-            pendingApprovals = snapshot.val() || {};
-            if (currentUser) checkAuthAndRender();
-            renderPendingApprovals();
-        });
+    async function handleNoticeImageFile(inputEl) {
+        const file = inputEl && inputEl.files && inputEl.files[0];
+        if (!file) return;
+        try {
+            const compressed = await compressImageToDataUrl(file);
+            setDraftNoticeImage(compressed);
+        } catch (err) {
+            alert(err.message);
+            inputEl.value = '';
+        }
+    }
 
-        db.ref('bowling_notices').on('value', (snapshot) => {
-            const raw = snapshot.val() || [];
-            clubNotices = Array.isArray(raw) ? raw.filter(Boolean) : Object.values(raw).filter(Boolean);
-            clubNotices.sort((a, b) => (b.id || 0) - (a.id || 0));
+    async function handleEditNoticeImageFile(inputEl) {
+        const file = inputEl && inputEl.files && inputEl.files[0];
+        if (!file) return;
+        try {
+            editingNoticeImageData = await compressImageToDataUrl(file);
             renderClubNotices();
-        });
-
-        db.ref('bowling_pushConfig').on('value', (snapshot) => {
-            pushConfig = snapshot.val() || { gasUrl: '', pushSecret: '', vapidKey: '' };
-        });
-
-        db.ref('bowling_players').on('value', (snapshot) => {
-            players = snapshot.val() || [];
-            populateTargetMonthSelect();
-            renderPlayerList();
-            updateStatistics();
-            document.getElementById('loadingMsg').style.display = 'none';
-        });
-
-        db.ref('bowling_history').on('value', (snapshot) => {
-            const rawData = snapshot.val() || [];
-            if (Array.isArray(rawData)) {
-                history = rawData.filter(h => h && h.date && Array.isArray(h.records));
-            } else {
-                history = Object.values(rawData).filter(h => h && h.date && Array.isArray(h.records));
-            }
-            if (isAdmin) normalizeAllHistoryDB(true);
-            populateTargetMonthSelect();
-            populateHistoryMonthDropdown();
-            populateHistoryTeamRangeSelects();
-            populateAttendanceMonthSelects();
-            populateIndivMonthSelects();
-            populateClubStatMonthSelects();
-            renderPlayerList();
-            renderHistory();
-            updateStatistics();
-        });
-
-        db.ref('bowling_hiddenStatMembers').on('value', (snapshot) => {
-            const rawHidden = snapshot.val() || {};
-            const normalizedHidden = {};
-            Object.keys(rawHidden).forEach(k => {
-                if (rawHidden[k] === true) normalizedHidden[k.trim()] = true;
-            });
-            hiddenStatMembers = normalizedHidden;
-            updateStatistics();
-        });
-
-        db.ref('bowling_teamCount').on('value', (snapshot) => {
-            const count = snapshot.val();
-            if (count) {
-                currentTeamCount = String(count);
-                updateTeamCountUI(currentTeamCount);
-            }
-        });
-
-        db.ref('bowling_publishedTeamSettings').on('value', (snapshot) => {
-            const settings = snapshot.val();
-            if (settings) {
-                publishedTeamSettings = settings;
-                updatePublishedModeUI();
-                computeAndRenderTeams();
-            }
-        });
-
-        db.ref('bowling_liveScores').on('value', (snapshot) => {
-            liveScores = snapshot.val() || {};
-            const activePlayers = players.filter(p => p.checked);
-            if (activePlayers.length > 0 && document.getElementById('resultCard').style.display === 'block') {
-                updateScoreTableInputsFromLive(activePlayers);
-            }
-        });
-
-        db.ref('bowling_matchActive').on('value', (snapshot) => {
-            const isActive = snapshot.val();
-            if (isActive) {
-                db.ref('bowling_activePlayers').once('value', (snap) => {
-                    const activeList = snap.val() || players.filter(p => p.checked);
-                    matchResults = activeList;
-                    renderScoreTable(matchResults);
-                    populateHistoryTeamRangeSelects();
-                    document.getElementById('waitingNoticeCard').style.display = 'none';
-                    document.getElementById('resultCard').style.display = 'block';
-                });
-            } else {
-                document.getElementById('resultCard').style.display = 'none';
-                document.getElementById('waitingNoticeCard').style.display = 'block';
-            }
-        });
-    };
-
-    function handleCustomTeamSpinnerInput(inputEl) {
-        const raw = inputEl.value;
-        if (raw === '') {
-            prevCustomTeamSpinnerVal = null;
-            return;
+        } catch (err) {
+            alert(err.message);
+            inputEl.value = '';
         }
-        const num = parseInt(raw, 10);
-        if (isNaN(num)) return;
-
-        if (num <= 1) {
-            inputEl.value = '2';
-            prevCustomTeamSpinnerVal = 2;
-            return;
-        }
-        prevCustomTeamSpinnerVal = num;
     }
 
-    function applyCustomTeamCount(rawVal) {
-        const inputEl = document.getElementById('customTeamCountInput');
-        const trimmed = String(rawVal || '').trim();
-        const parsed = parseInt(trimmed, 10);
+    document.addEventListener('paste', async (e) => {
+        if (!isAdmin) return;
+        const items = e.clipboardData && e.clipboardData.items;
+        if (!items) return;
 
-        if (trimmed === '' || isNaN(parsed) || parsed <= 1) {
-            if (inputEl) inputEl.value = '2';
-            prevCustomTeamSpinnerVal = 2;
-            changeTeamCount('2');
-            return;
-        }
-        prevCustomTeamSpinnerVal = parsed;
-        changeTeamCount(String(parsed));
-    }
-
-    function changeTeamCount(val) {
-        if (!val) return;
-        currentTeamCount = String(val);
-        updateTeamCountUI(currentTeamCount);
-        db.ref('bowling_teamCount').set(currentTeamCount);
-        updateAuthUI();
-        computeAndRenderTeams();
-    }
-
-    function updateTeamCountUI(val) {
-        const strVal = String(val);
-        const quickBtns = document.querySelectorAll('.team-count-btn');
-        let matchedQuick = false;
-        quickBtns.forEach(btn => {
-            if (btn.getAttribute('data-value') === strVal) {
-                btn.classList.add('active');
-                matchedQuick = true;
-            } else {
-                btn.classList.remove('active');
-            }
-        });
-        const customInput = document.getElementById('customTeamCountInput');
-        if (customInput) {
-            if (!matchedQuick && strVal !== 'solo') {
-                customInput.value = strVal;
-                prevCustomTeamSpinnerVal = parseInt(strVal, 10) || 2;
-                customInput.classList.add('active');
-            } else {
-                customInput.value = '';
-                prevCustomTeamSpinnerVal = null;
-                customInput.classList.remove('active');
+        let imageFile = null;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type && items[i].type.startsWith('image/')) {
+                imageFile = items[i].getAsFile();
+                break;
             }
         }
-    }
+        if (!imageFile) return;
 
-    function applyAvgPreset(presetKey) {
-        document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-        const activeBtn = document.getElementById(`preset_${presetKey}`);
-        if (activeBtn) activeBtn.classList.add('active');
-
-        const startSelect = document.getElementById('targetStartMonthSelect');
-        const endSelect = document.getElementById('targetEndMonthSelect');
-        if (!startSelect || !endSelect) return;
-
-        const months = Array.from(startSelect.options)
-            .map(o => o.value)
-            .filter(v => v && v !== 'all')
-            .sort();
-
-        if (presetKey === 'all' || months.length === 0) {
-            startSelect.value = 'all';
-            endSelect.value = 'all';
-        } else {
-            const countMap = { '1m': 1, '3m': 3, '6m': 6 };
-            const n = countMap[presetKey] || 3;
-            const startIdx = Math.max(0, months.length - n);
-            startSelect.value = months[startIdx];
-            endSelect.value = months[months.length - 1];
-        }
-        refreshPlayerScoresByMonth();
-    }
-
-    function onTargetMonthManualChange() {
-        document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-        refreshPlayerScoresByMonth();
-    }
-
-    function logoutSession() {
-        firebase.auth().signOut().then(() => {
-            isAdmin = false;
-            isSuperAdmin = false;
-            currentUser = null;
-            location.reload();
-        });
-    }
-
-    function checkAuthAndRender() {
-        if (!currentUser) {
-            document.getElementById('authOverlay').style.display = 'flex';
-            document.getElementById('loginCardView').style.display = 'block';
-            document.getElementById('pendingCardView').style.display = 'none';
-            document.getElementById('mainContainer').style.display = 'none';
-            return;
-        }
-
-        const isApproved = isSuperAdmin || approvedUsers[currentUser.uid] || Object.values(approvedUsers).includes(currentUser.name);
-        if (isApproved) {
-            document.getElementById('authOverlay').style.display = 'none';
-            document.getElementById('mainContainer').style.display = 'block';
-            document.getElementById('userInfoDisplay').innerText = `(${currentUser.name})`;
-            updateAuthUI();
-            return;
-        }
-
-        document.getElementById('authOverlay').style.display = 'flex';
-        document.getElementById('loginCardView').style.display = 'none';
-        document.getElementById('pendingCardView').style.display = 'block';
-        document.getElementById('mainContainer').style.display = 'none';
-        document.getElementById('pendingNameDisplay').innerText = currentUser.name;
-    }
-
-    function toggleAuthMode() {
-        if (!hasAdminPrivilege(currentUser)) {
-            alert('관리자 권한이 지정된 구글 계정만 관리자 모드로 전환할 수 있습니다.');
-            return;
-        }
-        isAdmin = !isAdmin;
-        if (!isAdmin) {
-            editingHistoryIds.clear();
-            draftHistoryAdditions = {};
-            draftHistoryDeletions = {};
-        } else {
-            normalizeAllHistoryDB(true);
-        }
-        updateAuthUI();
-        renderHistory();
-    }
-
-    function updateAuthUI() {
-        const indicator = document.getElementById('modeIndicator');
-        const switchBtn = document.getElementById('authSwitchBtn');
-        const adminControlCard = document.getElementById('adminControlCard');
-        const adminDBControlCard = document.getElementById('adminDBControlCard');
-        const adminNoticeComposeCard = document.getElementById('adminNoticeComposeCard');
-        const saveRecordContainer = document.getElementById('saveRecordContainer');
-        const cancelMatchBtn = document.getElementById('cancelMatchBtn');
-        const adminTeamControlPanel = document.getElementById('adminTeamControlPanel');
-        const manageSubAdminsBtn = document.getElementById('manageSubAdminsBtn');
-        const configurePushBtn = document.getElementById('configurePushBtn');
-
-        const canBeAdmin = hasAdminPrivilege(currentUser);
-        if (switchBtn) switchBtn.style.display = canBeAdmin ? 'inline-block' : 'none';
-
-        let isSolo = currentTeamCount === 'solo';
-
-        if (isAdmin && canBeAdmin) {
-            indicator.innerText = isSuperAdmin ? "👑 기본 관리자" : "🛡️ 추가 관리자";
-            indicator.style.color = "#16a34a";
-            switchBtn.innerText = "일반 전환";
-            adminControlCard.style.display = 'block';
-            adminDBControlCard.style.display = 'block';
-            if (adminNoticeComposeCard) adminNoticeComposeCard.style.display = 'block';
-            if (saveRecordContainer) saveRecordContainer.style.display = 'block';
-            if (cancelMatchBtn) cancelMatchBtn.style.display = 'inline-block';
-            if (adminTeamControlPanel) adminTeamControlPanel.style.display = isSolo ? 'none' : 'block';
-            if (manageSubAdminsBtn) manageSubAdminsBtn.style.display = isSuperAdmin ? 'inline-block' : 'none';
-            if (configurePushBtn) configurePushBtn.style.display = isSuperAdmin ? 'inline-block' : 'none';
-        } else {
-            indicator.innerText = "👤 일반 회원";
-            indicator.style.color = "var(--primary-color)";
-            if (canBeAdmin) switchBtn.innerText = "관리자 전환";
-            adminControlCard.style.display = 'none';
-            adminDBControlCard.style.display = 'none';
-            if (adminNoticeComposeCard) adminNoticeComposeCard.style.display = 'none';
-            if (saveRecordContainer) saveRecordContainer.style.display = 'none'; 
-            if (cancelMatchBtn) cancelMatchBtn.style.display = 'none';
-            if (adminTeamControlPanel) adminTeamControlPanel.style.display = 'none';
-            if (manageSubAdminsBtn) manageSubAdminsBtn.style.display = 'none';
-            if (configurePushBtn) configurePushBtn.style.display = 'none';
-        }
-        renderClubNotices();
-    }
-
-    function checkAdminAndExecute(callback) {
-        if (isAdmin && hasAdminPrivilege(currentUser)) {
-            callback();
-        } else {
-            alert('관리자 권한이 필요합니다.');
-        }
-    }
-
-    function openSubAdminModal() {
-        if (!isSuperAdmin) return alert('기본 관리자만 추가 관리자를 지정할 수 있습니다.');
-        const uids = Object.keys(approvedUsers || {});
-        if (uids.length === 0) return alert('승인된 회원이 없습니다.');
-
-        document.getElementById('subAdminListContainer').innerHTML = uids.map(uid => {
-            const name = approvedUsers[uid];
-            const isChecked = subAdmins && subAdmins[uid] === true;
-            const isSelf = currentUser && currentUser.uid === uid;
-            return `
-                <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; background: white; border-radius: 6px; margin-bottom: 5px; border: 1px solid var(--border-color);">
-                    <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; width: 100%;">
-                        <input type="checkbox" class="sub-admin-chk" data-uid="${uid}" ${isChecked || isSelf ? 'checked' : ''} ${isSelf ? 'disabled' : ''} style="width: 16px; height: 16px;">
-                        <strong>${escapeHtml(name)}</strong> ${isSelf ? '<span class="auto-badge">기본 관리자</span>' : ''}
-                    </label>
-                </div>
-            `;
-        }).join('');
-        document.getElementById('subAdminModal').style.display = 'flex';
-    }
-
-    function closeSubAdminModal() { document.getElementById('subAdminModal').style.display = 'none'; }
-
-    function saveSubAdmins() {
-        if (!isSuperAdmin) return;
-        let nextAdmins = {};
-        document.querySelectorAll('.sub-admin-chk').forEach(chk => {
-            const uid = chk.getAttribute('data-uid');
-            if (chk.checked && uid && (!currentUser || uid !== currentUser.uid)) {
-                nextAdmins[uid] = true;
-            }
-        });
-        db.ref('bowling_admins').set(nextAdmins).then(() => {
-            closeSubAdminModal();
-            alert('추가 관리자 권한 설정이 저장되었습니다.');
-        });
-    }
-
-    function openPushConfigModal() {
-        if (!isSuperAdmin) return alert('기본 관리자만 푸시 서버 설정을 변경할 수 있습니다.');
-        document.getElementById('gasWebhookUrlInput').value = pushConfig.gasUrl || '';
-        document.getElementById('gasPushSecretInput').value = pushConfig.pushSecret || '';
-        document.getElementById('fcmVapidKeyInput').value = pushConfig.vapidKey || '';
-        document.getElementById('pushConfigModal').style.display = 'flex';
-    }
-
-    function closePushConfigModal() { document.getElementById('pushConfigModal').style.display = 'none'; }
-
-    function savePushConfig() {
-        if (!isSuperAdmin) return;
-        const nextCfg = {
-            gasUrl: document.getElementById('gasWebhookUrlInput').value.trim(),
-            pushSecret: document.getElementById('gasPushSecretInput').value.trim(),
-            vapidKey: document.getElementById('fcmVapidKeyInput').value.trim()
-        };
-        db.ref('bowling_pushConfig').set(nextCfg).then(() => {
-            closePushConfigModal();
-            alert('푸시 서버 설정이 저장되었습니다.');
-        });
-    }
-
-    async function enablePushNotifications() {
-        if (!currentUser || !currentUser.uid) return alert('로그인 후 이용해 주세요.');
-        if (!('Notification' in window)) return alert('이 브라우저는 푸시 알림을 지원하지 않습니다.');
+        const activeEl = document.activeElement;
+        const isInEditBox = activeEl && activeEl.closest && activeEl.closest('.notice-edit-box');
+        const isInComposeArea = activeEl && (
+            activeEl.id === 'noticeTitle' ||
+            activeEl.id === 'noticeBody' ||
+            activeEl.id === 'noticeCategory' ||
+            (activeEl.closest && activeEl.closest('#adminNoticeComposeCard'))
+        );
 
         try {
-            const permission = await Notification.requestPermission();
-            if (permission !== 'granted') {
-                return alert('알림 권한이 거부되었습니다. 브라우저 설정에서 알림을 허용해 주세요.');
-            }
-
-            if (firebase.messaging && firebase.messaging.isSupported()) {
-                const messaging = firebase.messaging();
-                const swReg = await navigator.serviceWorker.ready;
-                const tokenOptions = { serviceWorkerRegistration: swReg };
-                if (pushConfig && pushConfig.vapidKey) tokenOptions.vapidKey = pushConfig.vapidKey;
-
-                const token = await messaging.getToken(tokenOptions);
-                if (token) {
-                    await db.ref(`bowling_fcmTokens/${currentUser.uid}`).set({
-                        token: token,
-                        name: currentUser.name,
-                        updatedAt: Date.now()
-                    });
-                    initForegroundPushListener();
-                    const btn = document.getElementById('pushEnableBtn');
-                    if (btn) { btn.innerText = '🔔 알림 설정됨'; btn.style.background = '#16a34a'; }
-                    alert('푸시 알림이 활성화되었습니다!');
-                }
-            } else {
-                alert('홈 화면에 앱을 추가(PWA 설치)한 뒤 실행하면 푸시 알림을 받을 수 있습니다.');
+            const compressed = await compressImageToDataUrl(imageFile);
+            if (editingNoticeId !== null && (isInEditBox || !isInComposeArea)) {
+                e.preventDefault();
+                editingNoticeImageData = compressed;
+                renderClubNotices();
+            } else if (isInComposeArea || document.getElementById('notice-tab')?.classList.contains('active')) {
+                e.preventDefault();
+                setDraftNoticeImage(compressed);
             }
         } catch (err) {
-            console.error('FCM 토큰 등록 오류:', err);
-            alert('알림 토큰 등록 중 확인이 필요합니다: ' + err.message);
+            alert('붙여넣기 이미지 처리 중 오류: ' + err.message);
         }
-    }
-
-    async function triggerGasPushNotification({ targetType, attendeeNames, title, body }) {
-        if (!isAdmin || !hasAdminPrivilege(currentUser)) return;
-        if (!pushConfig || !pushConfig.gasUrl || !pushConfig.pushSecret) return;
-
-        const now = Date.now();
-        if (now - lastPushSentAt < 3000) return;
-        lastPushSentAt = now;
-
-        try {
-            const idToken = await firebase.auth().currentUser.getIdToken();
-            await fetch(pushConfig.gasUrl, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    secret: pushConfig.pushSecret,
-                    senderUid: currentUser.uid,
-                    senderEmail: currentUser.email,
-                    idToken: idToken,
-                    targetType: targetType,
-                    attendeeNames: attendeeNames || [],
-                    title: title,
-                    body: body
-                })
-            });
-        } catch (e) {
-            console.error('GAS 푸시 발송 요청 실패:', e);
-        }
-    }
+    });
 
     function publishClubNotice() {
         checkAdminAndExecute(async () => {
@@ -1302,6 +816,7 @@
                 category,
                 title,
                 body,
+                imageData: draftNoticeImageData || '',
                 author: currentUser.name,
                 createdAt
             };
@@ -1311,6 +826,7 @@
 
             document.getElementById('noticeTitle').value = '';
             document.getElementById('noticeBody').value = '';
+            clearNoticeDraftImage();
 
             if (sendPush) {
                 await triggerGasPushNotification({
@@ -1323,12 +839,82 @@
         });
     }
 
+    function startEditClubNotice(id) {
+        checkAdminAndExecute(() => {
+            const target = clubNotices.find(n => n.id === id);
+            if (!target) return;
+            editingNoticeId = id;
+            editingNoticeImageData = target.imageData || '';
+            renderClubNotices();
+        });
+    }
+
+    function cancelEditClubNotice() {
+        editingNoticeId = null;
+        editingNoticeImageData = '';
+        renderClubNotices();
+    }
+
+    function removeEditingNoticeImage() {
+        editingNoticeImageData = '';
+        renderClubNotices();
+    }
+
+    function saveEditedClubNotice(id) {
+        checkAdminAndExecute(async () => {
+            const category = document.getElementById(`editNoticeCat_${id}`)?.value || '공지사항';
+            const title = (document.getElementById(`editNoticeTitle_${id}`)?.value || '').trim().slice(0, 80);
+            const body = (document.getElementById(`editNoticeBody_${id}`)?.value || '').trim().slice(0, 1000);
+            const sendPush = document.getElementById(`editNoticePush_${id}`)?.checked || false;
+
+            if (!title || !body) return alert('제목과 내용을 모두 입력해주세요.');
+
+            const nextList = clubNotices.map(n => {
+                if (n.id !== id) return n;
+                return {
+                    ...n,
+                    category,
+                    title,
+                    body,
+                    imageData: editingNoticeImageData || '',
+                    updatedAt: new Date().toLocaleString()
+                };
+            });
+
+            await db.ref('bowling_notices').set(nextList);
+            editingNoticeId = null;
+            editingNoticeImageData = '';
+            renderClubNotices();
+
+            if (sendPush) {
+                await triggerGasPushNotification({
+                    targetType: 'all',
+                    title: `[Connection ${category} 수정] ${title}`,
+                    body: body
+                });
+            }
+            alert('공지/일정이 수정되었습니다.');
+        });
+    }
+
     function deleteClubNotice(id) {
         checkAdminAndExecute(() => {
             if (!confirm('이 공지/일정을 삭제하시겠습니까?')) return;
+            if (editingNoticeId === id) {
+                editingNoticeId = null;
+                editingNoticeImageData = '';
+            }
             const nextList = clubNotices.filter(n => n.id !== id);
             db.ref('bowling_notices').set(nextList);
         });
+    }
+
+    function openNoticeImagePopup(src) {
+        if (!src) return;
+        const win = window.open('', '_blank');
+        if (win) {
+            win.document.write(`<title>첨부 사진 보기</title><body style="margin:0;background:#0f172a;display:flex;justify-content:center;align-items:center;min-height:100vh;"><img src="${src}" style="max-width:100%;max-height:100vh;object-fit:contain;"></body>`);
+        }
     }
 
     function renderClubNotices() {
@@ -1338,21 +924,58 @@
             container.innerHTML = `<div class="empty-stats">등록된 공지사항이나 일정이 없습니다.</div>`;
             return;
         }
-        container.innerHTML = clubNotices.map(n => `
-            <div class="notice-feed-item">
-                <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 4px;">
-                    <div>
-                        <span class="auto-badge">${escapeHtml(n.category)}</span>
-                        <strong style="font-size: 14px; margin-left: 4px;">${escapeHtml(n.title)}</strong>
+        container.innerHTML = clubNotices.map(n => {
+            const isEditing = isAdmin && (editingNoticeId === n.id);
+            if (isEditing) {
+                return `
+                    <div class="notice-feed-item">
+                        <div class="notice-edit-box">
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                <select id="editNoticeCat_${n.id}" style="width: auto; min-width: 110px; font-size: 12px;">
+                                    <option value="정모 일정" ${n.category === '정모 일정' ? 'selected' : ''}>📅 정모 일정</option>
+                                    <option value="공지사항" ${n.category === '공지사항' ? 'selected' : ''}>📢 공지사항</option>
+                                </select>
+                                <input type="text" id="editNoticeTitle_${n.id}" value="${escapeHtml(n.title)}" style="flex: 1; min-width: 160px; font-size: 13px;">
+                            </div>
+                            <textarea id="editNoticeBody_${n.id}" rows="3" style="font-size: 13px;">${escapeHtml(n.body)}</textarea>
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; background: white; padding: 6px 8px; border-radius: 6px; border: 1px dashed #93c5fd;">
+                                <span>🖼️ 사진 교체/붙여넣기(Ctrl+V):</span>
+                                <input type="file" accept="image/*" style="width: auto; max-width: 190px; font-size: 11px; padding: 3px;" onchange="handleEditNoticeImageFile(this)">
+                                ${editingNoticeImageData ? `<button type="button" class="danger" onclick="removeEditingNoticeImage()" style="padding: 3px 7px; font-size: 11px;">사진 삭제</button>` : ''}
+                            </div>
+                            ${editingNoticeImageData ? `<img src="${editingNoticeImageData}" alt="수정 미리보기" class="notice-feed-img">` : ''}
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+                                <label style="font-size: 12px; color: #1e40af; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" id="editNoticePush_${n.id}" style="width: 14px; height: 14px;"> 수정 내용 전체 푸시 발송
+                                </label>
+                                <div style="display: flex; gap: 6px;">
+                                    <button type="button" class="success" onclick="saveEditedClubNotice(${n.id})" style="padding: 5px 10px; font-size: 12px;">💾 저장</button>
+                                    <button type="button" class="secondary" onclick="cancelEditClubNotice()" style="padding: 5px 10px; font-size: 12px;">취소</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 6px;">
-                        <span style="font-size: 11px; color: #64748b;">${escapeHtml(n.createdAt)}</span>
-                        ${isAdmin ? `<button class="delete-btn" onclick="deleteClubNotice(${n.id})">삭제</button>` : ''}
+                `;
+            }
+
+            return `
+                <div class="notice-feed-item">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 4px;">
+                        <div>
+                            <span class="auto-badge">${escapeHtml(n.category)}</span>
+                            <strong style="font-size: 14px; margin-left: 4px;">${escapeHtml(n.title)}</strong>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 11px; color: #64748b;">${escapeHtml(n.createdAt)}</span>
+                            ${isAdmin ? `<button type="button" class="warning" onclick="startEditClubNotice(${n.id})" style="padding: 3px 6px; font-size: 11px;">수정</button>` : ''}
+                            ${isAdmin ? `<button type="button" class="delete-btn" onclick="deleteClubNotice(${n.id})">삭제</button>` : ''}
+                        </div>
                     </div>
+                    <div style="white-space: pre-line; color: #334155; line-height: 1.45;">${escapeHtml(n.body)}</div>
+                    ${n.imageData ? `<img src="${n.imageData}" alt="공지 첨부 이미지" class="notice-feed-img" onclick="openNoticeImagePopup(this.src)">` : ''}
                 </div>
-                <div style="white-space: pre-line; color: #334155; line-height: 1.45;">${escapeHtml(n.body)}</div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     }
 
     function renderPendingApprovals() {
