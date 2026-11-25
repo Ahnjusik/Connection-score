@@ -1,15 +1,35 @@
 {
-  "name": "Connection 볼링 점수 관리",
+  "id": "/Connection-score/",
+  "name": "커넥션볼링 점수관리",
   "short_name": "커넥션볼링",
-  "start_url": "./index.html",
+  "description": "Bowling Connection 클럽 실시간 스코어 및 팀 편성 관리 시스템",
+  "start_url": "/Connection-score/",
+  "scope": "/Connection-score/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#f8fafc",
   "theme_color": "#2563eb",
+  "launch_handler": {
+    "client_mode": ["focus-existing", "auto"]
+  },
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/3349/3349692.png",
+      "src": "/Connection-score/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/Connection-score/logo.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/Connection-score/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
