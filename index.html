@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>🎳 Connection 볼링 클럽 점수관리 System</title>
     
     <link rel="manifest" href="manifest.json">
@@ -59,7 +62,49 @@
         button.secondary { background-color: #64748b; }
         button.success { background-color: #16a34a; }
         button.danger { background-color: #ef4444; }
+        button.warning { background-color: #d97706; }
         button.kakao-share { background-color: #fee500; color: #191919; font-weight: 600; }
 
         .team-count-group { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px; }
-        .team-count-btn { background: #f1f5f9; color: #475569; border:
+        .team-count-btn { background: #f1f5f9; color: #475569; border: 1px solid var(--border-color); padding: 6px 10px; font-size: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s; }
+        .team-count-btn.active { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+
+        .btn-container { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+        .list-header { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color); font-weight: 600; font-size: 13px; color: #64748b; flex-wrap: wrap; gap: 6px; }
+        .player-list { max-height: 200px; overflow-y: auto; margin-top: 6px; }
+        .player-list.expanded { max-height: none; overflow-y: visible; }
+        .player-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #f1f5f9; border-radius: 6px; margin-bottom: 5px; font-size: 13px; }
+        .player-info { display: flex; align-items: center; gap: 6px; }
+        .player-info input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+        .edit-score-input { width: 50px; padding: 3px; font-size: 13px; text-align: center; border: 1px solid #cbd5e1; border-radius: 4px; }
+        .delete-btn { background: #ef4444; color: white; border: none; padding: 3px 6px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+
+        .teams-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 15px; }
+        .team-box { background: var(--card-bg); border: 2px solid var(--border-color); border-radius: 10px; padding: 12px; }
+        .team-box.rank-1 { border-color: #2563eb !important; background-color: #eff6ff; }
+        .team-box.rank-2 { border-color: #16a34a !important; background-color: #f0fdf4; }
+        .team-box.rank-3 { border-color: #d97706 !important; background-color: #fffbeb; }
+        .team-box h3 { margin-top: 0; font-size: 15px; border-bottom: 2px solid var(--primary-color); padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+        .team-stats { font-size: 12px; color: #64748b; margin-bottom: 8px; }
+        .team-member { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed var(--border-color); font-size: 13px; align-items: center; }
+
+        .score-table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 10px; font-size: 12px; white-space: nowrap; }
+        .score-table th, .score-table td { border-bottom: 1px solid var(--border-color); border-right: 1px solid var(--border-color); padding: 6px 4px; text-align: center; }
+        .score-table th { background-color: #f1f5f9; color: #475569; border-top: 1px solid var(--border-color); }
+        .score-table th:first-child, .score-table td:first-child { border-left: 1px solid var(--border-color); }
+        
+        .score-table th:first-child, .score-table td:first-child {
+            position: -webkit-sticky;
+            position: sticky;
+            left: 0;
+            z-index: 10;
+        }
+        .score-table th:first-child { background-color: #e2e8f0; color: #334155; box-shadow: 2px 0 5px -2px rgba(0,0,0,0.1); }
+        .score-table td:first-child { 
+            background-color: #ffffff; 
+            font-weight: 600; 
+            box-shadow: inset -1px 0 0 var(--border-color), 2px 0 5px -2px rgba(0,0,0,0.1); 
+        }
+
+        .score-input { width: 45px; padding: 4px; text-align: center; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; }
+        .hist-edit-input { width: 46px; padding: 3px; text-align: center; border: 1px solid #2563eb; border-radius: 4px; font-size: 12px; background: #eff6ff; font-weight:
