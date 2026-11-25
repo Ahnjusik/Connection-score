@@ -68,6 +68,9 @@
         .compact-mode-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
         .team-count-btn { background: #f1f5f9; color: #475569; border: 1px solid var(--border-color); padding: 6px 10px; font-size: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s; }
         .team-count-btn.active { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+        .team-count-custom-wrap { display: inline-flex; align-items: center; gap: 4px; }
+        .team-count-input { width: 68px; padding: 5px 8px; font-size: 12px; font-weight: 600; text-align: center; border: 1px solid var(--border-color); border-radius: 6px; }
+        .team-count-input.active { background: #eff6ff; border-color: var(--primary-color); color: var(--primary-color); }
         .compact-select { width: auto; min-width: 84px; padding: 5px 8px; font-size: 12px; font-weight: 600; }
 
         .preset-bar { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
@@ -270,27 +273,22 @@
                 <div id="pendingApprovalList" style="display: flex; flex-direction: column; gap: 6px;"></div>
             </div>
 
-            <!-- 개선된 진행 방식 선택 (자주 쓰는 퀵버튼 + 전체 팀 수 셀렉트) -->
+            <!-- 진행 방식: 개인전 / 2팀 / 3팀 / 4팀 + 직접 입력 칸 (min/max 제한 없음) -->
             <div style="margin-bottom: 12px;">
                 <label style="font-weight: 600; display: block; margin-bottom: 6px; font-size: 13px;">진행 방식:</label>
                 <div class="compact-mode-row" id="teamCountGroup">
                     <button type="button" class="team-count-btn" data-value="solo" onclick="changeTeamCount('solo')">개인전</button>
+                    <button type="button" class="team-count-btn" data-value="2" onclick="changeTeamCount('2')">2팀</button>
                     <button type="button" class="team-count-btn" data-value="3" onclick="changeTeamCount('3')">3팀</button>
                     <button type="button" class="team-count-btn active" data-value="4" onclick="changeTeamCount('4')">4팀</button>
-                    <button type="button" class="team-count-btn" data-value="5" onclick="changeTeamCount('5')">5팀</button>
-                    <button type="button" class="team-count-btn" data-value="6" onclick="changeTeamCount('6')">6팀</button>
-                    <select id="teamCountSelect" class="compact-select" onchange="changeTeamCount(this.value)" title="기타 팀 수 선택">
-                        <option value="">기타 팀수</option>
-                        <option value="2">2팀</option>
-                        <option value="7">7팀</option>
-                        <option value="8">8팀</option>
-                        <option value="9">9팀</option>
-                        <option value="10">10팀</option>
-                    </select>
+                    <div class="team-count-custom-wrap">
+                        <input type="number" id="customTeamCountInput" class="team-count-input" placeholder="직접입력" onchange="applyCustomTeamCount(this.value)" onkeydown="if(event.key==='Enter'){ event.preventDefault(); applyCustomTeamCount(this.value); }">
+                        <span style="font-size: 12px; color: #475569; font-weight: 600;">팀</span>
+                    </div>
                 </div>
             </div>
 
-            <!-- 개선된 기준 에버 기간 선택 (원클릭 프리셋 + 기간 셀렉트) -->
+            <!-- 기준 에버 기간 선택 (원클릭 프리셋 + 기간 셀렉트) -->
             <div style="margin-bottom: 12px; font-size: 13px;">
                 <label style="font-weight: 600; display: block; margin-bottom: 6px;">📅 기준 에버:</label>
                 <div class="preset-bar">
@@ -527,8 +525,8 @@
     let isPlayerListExpanded = false;
     let currentGameTab = 1;
     let editingHistoryIds = new Set();
-    let draftHistoryAdditions = {}; // { [histId]: [{ name, g1, g2, g3, g4 }] }
-    let draftHistoryDeletions = {}; // { [histId]: Set<playerName> }
+    let draftHistoryAdditions = {};
+    let draftHistoryDeletions = {};
     
     let currentSortColumn = 'avg';
     let currentSortDirection = 'desc';
@@ -536,6 +534,14 @@
     let teamAvgChartInstance = null;
     let attendanceChartInstance = null;
     let indivAvgChartInstance = null;
+
+    // 통계 제외 여부 정규화 확인 함수 (앞뒤 공백 제거 후 일치 확인)
+    function isMemberHidden(name) {
+        if (!name || !hiddenStatMembers) return false;
+        const clean = String(name).trim();
+        if (hiddenStatMembers[clean] === true || hiddenStatMembers[name] === true) return true;
+        return Object.keys(hiddenStatMembers).some(k => hiddenStatMembers[k] === true && k.trim() === clean);
+    }
 
     function getAccurateRecordStats(r) {
         const g1 = parseFloat(r.g1) || 0;
@@ -676,15 +682,22 @@
         });
 
         db.ref('bowling_hiddenStatMembers').on('value', (snapshot) => {
-            hiddenStatMembers = snapshot.val() || {};
-            renderClubStatsTable();
+            const rawHidden = snapshot.val() || {};
+            const normalizedHidden = {};
+            Object.keys(rawHidden).forEach(k => {
+                if (rawHidden[k] === true) {
+                    normalizedHidden[k.trim()] = true;
+                }
+            });
+            hiddenStatMembers = normalizedHidden;
+            updateStatistics();
         });
 
         db.ref('bowling_teamCount').on('value', (snapshot) => {
             const count = snapshot.val();
             if(count) {
-                currentTeamCount = count;
-                updateTeamCountUI(count);
+                currentTeamCount = String(count);
+                updateTeamCountUI(currentTeamCount);
             }
         });
 
@@ -737,6 +750,16 @@
         computeAndRenderTeams();
     }
 
+    function applyCustomTeamCount(rawVal) {
+        const parsed = parseInt(rawVal, 10);
+        if (isNaN(parsed) || parsed < 1) return;
+        if (parsed === 1) {
+            changeTeamCount('solo');
+            return;
+        }
+        changeTeamCount(String(parsed));
+    }
+
     function updateTeamCountUI(val) {
         const strVal = String(val);
         const quickBtns = document.querySelectorAll('.team-count-btn');
@@ -749,19 +772,14 @@
                 btn.classList.remove('active');
             }
         });
-        const selectEl = document.getElementById('teamCountSelect');
-        if (selectEl) {
-            const extraOptions = ['2', '7', '8', '9', '10'];
-            if (!matchedQuick && extraOptions.includes(strVal)) {
-                selectEl.value = strVal;
-                selectEl.style.background = '#eff6ff';
-                selectEl.style.borderColor = '#2563eb';
-                selectEl.style.color = '#1d4ed8';
+        const customInput = document.getElementById('customTeamCountInput');
+        if (customInput) {
+            if (!matchedQuick && strVal !== 'solo') {
+                customInput.value = strVal;
+                customInput.classList.add('active');
             } else {
-                selectEl.value = '';
-                selectEl.style.background = '';
-                selectEl.style.borderColor = '';
-                selectEl.style.color = '';
+                customInput.value = '';
+                customInput.classList.remove('active');
             }
         }
     }
@@ -1126,6 +1144,7 @@
 
     function calculateMemberAvgForRange(memberName, startMonth, endMonth) {
         let totalSum = 0, count = 0;
+        const cleanMember = String(memberName).trim();
         history.forEach(h => {
             const m = h.date.match(/^(\d{4}[-./]\d{2})/);
             if (!m) return;
@@ -1133,7 +1152,7 @@
             if (startMonth !== 'all' && hm < startMonth) return;
             if (endMonth !== 'all' && hm > endMonth) return;
 
-            const record = h.records.find(r => r.name === memberName);
+            const record = h.records.find(r => String(r.name).trim() === cleanMember);
             if (record) {
                 const stats = getAccurateRecordStats(record);
                 if (stats.avg > 0) { totalSum += stats.avg; count++; }
@@ -1360,7 +1379,7 @@
     function calculateTeamsForGame(gameNum) {
         if (currentTeamCount === 'solo') return []; 
 
-        const teamCount = parseInt(currentTeamCount) || 4;
+        const teamCount = Math.max(1, parseInt(currentTeamCount, 10) || 4);
         const mode = publishedTeamSettings.mode || 'current';
         const startMonth = publishedTeamSettings.startMonth || 'all';
         const endMonth = publishedTeamSettings.endMonth || 'all';
@@ -1481,7 +1500,8 @@
                 if (badgeElem) {
                     badgeElem.style.display = 'inline-block';
                     badgeElem.innerText = `[팀 ${assignedTeam}]`;
-                    badgeElem.className = `team-badge team-badge-${assignedTeam > 10 ? 10 : assignedTeam}`;
+                    const colorIdx = ((assignedTeam - 1) % 10) + 1;
+                    badgeElem.className = `team-badge team-badge-${colorIdx}`;
                 }
             });
         }
@@ -1567,7 +1587,7 @@
                 const stats = getAccurateRecordStats({ g1, g2, g3, g4 });
                 const coverCount = (c1?1:0)+(c2?1:0)+(c3?1:0)+(c4?1:0);
 
-                return { name: p.name, g1, g2, g3, g4, c1, c2, c3, c4, total: stats.total, avg: stats.avg.toFixed(1), coverCount };
+                return { name: p.name.trim(), g1, g2, g3, g4, c1, c2, c3, c4, total: stats.total, avg: stats.avg.toFixed(1), coverCount };
             });
             records.sort((a, b) => b.total - a.total);
 
@@ -1575,7 +1595,7 @@
             if (existingIndex !== -1) {
                 let combined = [...history[existingIndex].records];
                 records.forEach(nr => {
-                    let idx = combined.findIndex(r => r.name === nr.name);
+                    let idx = combined.findIndex(r => String(r.name).trim() === nr.name);
                     if (idx !== -1) combined[idx] = nr; else combined.push(nr);
                 });
                 combined.sort((a, b) => b.total - a.total);
@@ -1625,8 +1645,8 @@
 
         const histObj = history.find(h => h.id === histId);
         const delSet = draftHistoryDeletions[histId] || new Set();
-        const existingActive = histObj ? histObj.records.some(r => r.name === targetName && !delSet.has(r.name)) : false;
-        const existingDraft = (draftHistoryAdditions[histId] || []).some(r => r.name === targetName);
+        const existingActive = histObj ? histObj.records.some(r => String(r.name).trim() === targetName && !delSet.has(r.name)) : false;
+        const existingDraft = (draftHistoryAdditions[histId] || []).some(r => String(r.name).trim() === targetName);
         if (existingActive || existingDraft) return alert(`'${targetName}'님은 이미 이 기록에 포함되어 있습니다.`);
 
         if (delSet.has(targetName)) delSet.delete(targetName);
@@ -1703,7 +1723,7 @@
             const stats = getAccurateRecordStats({ g1, g2, g3, g4 });
 
             updatedRecords.push({
-                name: added.name,
+                name: String(added.name).trim(),
                 g1, g2, g3, g4,
                 c1: false, c2: false, c3: false, c4: false,
                 total: stats.total,
@@ -1726,8 +1746,8 @@
 
     function getCandidateMemberNames() {
         const nameSet = new Set();
-        players.forEach(p => { if (p && p.name) nameSet.add(p.name); });
-        history.forEach(h => { if (h && Array.isArray(h.records)) h.records.forEach(r => { if (r && r.name) nameSet.add(r.name); }); });
+        players.forEach(p => { if (p && p.name) nameSet.add(String(p.name).trim()); });
+        history.forEach(h => { if (h && Array.isArray(h.records)) h.records.forEach(r => { if (r && r.name) nameSet.add(String(r.name).trim()); }); });
         return Array.from(nameSet).sort();
     }
 
@@ -1888,12 +1908,12 @@
                     const cols = line.split(',');
                     if (cols.length < 8) continue;
                     let dateStr = cols[0].includes('-') ? cols[0] : cols[1];
-                    let name = cols[2];
+                    let name = cols[2].trim();
                     let g1 = parseFloat(cols[3]) || 0, g2 = parseFloat(cols[4]) || 0, g3 = parseFloat(cols[5]) || 0, g4 = parseFloat(cols[6]) || 0;
                     const stats = getAccurateRecordStats({ g1, g2, g3, g4 });
                     if (!map[dateStr]) map[dateStr] = [];
                     let recs = map[dateStr];
-                    let existing = recs.find(r => r.name === name);
+                    let existing = recs.find(r => String(r.name).trim() === name);
                     if (existing) Object.assign(existing, { g1, g2, g3, g4, total: stats.total, avg: stats.avg.toFixed(1) });
                     else recs.push({ name, g1, g2, g3, g4, total: stats.total, avg: stats.avg.toFixed(1), coverCount: 0 });
                 }
@@ -1926,8 +1946,8 @@
 
     function populateStatPlayerSelect() {
         let set = new Set();
-        players.forEach(p => { if (!hiddenStatMembers[p.name]) set.add(p.name); });
-        history.forEach(h => { if(h && h.records) h.records.forEach(r => { if (!hiddenStatMembers[r.name]) set.add(r.name); }); });
+        players.forEach(p => { if (p && p.name && !isMemberHidden(p.name)) set.add(String(p.name).trim()); });
+        history.forEach(h => { if(h && h.records) h.records.forEach(r => { if (r && r.name && !isMemberHidden(r.name)) set.add(String(r.name).trim()); }); });
         allPlayerNames = Array.from(set).sort();
         filterStatPlayerDropdown();
     }
@@ -1952,7 +1972,7 @@
         const teamAvgs = chrono.map(h => {
             let hSum = 0, valid = 0;
             h.records.forEach(r => {
-                if (!hiddenStatMembers[r.name]) {
+                if (!isMemberHidden(r.name)) {
                     const stats = getAccurateRecordStats(r);
                     if (stats.avg > 0) { hSum += stats.avg; totalSum += stats.avg; totalCount++; valid++; }
                 }
@@ -1976,7 +1996,10 @@
         });
 
         let attend = {};
-        filteredH.forEach(h => h.records.forEach(r => { if (!hiddenStatMembers[r.name]) attend[r.name] = (attend[r.name] || 0) + 1; }));
+        filteredH.forEach(h => h.records.forEach(r => {
+            const cleanName = String(r.name).trim();
+            if (!isMemberHidden(cleanName)) attend[cleanName] = (attend[cleanName] || 0) + 1;
+        }));
         const showAll = document.getElementById('showAllAttendance').checked;
         let sortedAttend = Object.keys(attend).map(n => ({ name: n, count: attend[n] })).sort((a,b) => b.count - a.count);
         
@@ -1994,7 +2017,12 @@
     function renderIndividualStats() {
         const name = document.getElementById('statPlayerSelect').value;
         const startM = document.getElementById('indivStartMonth').value, endM = document.getElementById('indivEndMonth').value;
-        if (!name || history.length === 0 || hiddenStatMembers[name]) { document.getElementById('indivStatContent').style.display = 'none'; document.getElementById('emptyIndivStats').style.display = 'block'; return; }
+        if (!name || history.length === 0 || isMemberHidden(name)) {
+            document.getElementById('indivStatContent').style.display = 'none';
+            document.getElementById('emptyIndivStats').style.display = 'block';
+            renderClubStatsTable();
+            return;
+        }
         document.getElementById('indivStatContent').style.display = 'block'; document.getElementById('emptyIndivStats').style.display = 'none';
 
         const filteredH = history.filter(h => {
@@ -2006,8 +2034,9 @@
 
         const chrono = [...filteredH].reverse();
         let attend = 0, sumAvg = 0, validG = 0, high = 0, covers = 0;
+        const cleanSelected = String(name).trim();
         const avgs = chrono.map(h => {
-            const r = h.records.find(rec => rec.name === name);
+            const r = h.records.find(rec => String(rec.name).trim() === cleanSelected);
             if (r) {
                 const stats = getAccurateRecordStats(r);
                 attend++;
@@ -2045,13 +2074,18 @@
 
         let map = {};
         filteredH.forEach(h => h.records.forEach(r => {
-            if (hiddenStatMembers[r.name]) return;
+            const cleanName = String(r.name || '').trim();
+            if (!cleanName || isMemberHidden(cleanName)) return;
             const stats = getAccurateRecordStats(r);
-            if (!map[r.name]) map[r.name] = { name: r.name, sum: 0, count: 0, high: 0, low: 999, games: 0 };
-            if (stats.avg > 0) { map[r.name].sum += stats.avg; map[r.name].count++; }
+            if (!map[cleanName]) map[cleanName] = { name: cleanName, sum: 0, count: 0, high: 0, low: 999, games: 0 };
+            if (stats.avg > 0) { map[cleanName].sum += stats.avg; map[cleanName].count++; }
             [r.g1, r.g2, r.g3, r.g4].forEach(g => {
                 let s = parseFloat(g);
-                if (s > 0) { if (s > map[r.name].high) map[r.name].high = s; if (s < map[r.name].low) map[r.name].low = s; map[r.name].games++; }
+                if (s > 0) {
+                    if (s > map[cleanName].high) map[cleanName].high = s;
+                    if (s < map[cleanName].low) map[cleanName].low = s;
+                    map[cleanName].games++;
+                }
             });
         }));
 
@@ -2080,6 +2114,7 @@
     function renderClubStatsTable() {
         const { clubStatsArray } = getClubStatsArrayData();
         const tbody = document.getElementById('clubStatsTableBody');
+        if (!tbody) return;
         if (clubStatsArray.length === 0) return tbody.innerHTML = `<tr><td colspan="7" style="padding: 20px; color: #94a3b8;">데이터 없음</td></tr>`;
         tbody.innerHTML = clubStatsArray.map((item, i) => `
             <tr>
@@ -2096,14 +2131,14 @@
 
     function openMemberFilterModal() {
         let set = new Set();
-        players.forEach(p => set.add(p.name));
-        history.forEach(h => h.records.forEach(r => set.add(r.name)));
+        players.forEach(p => { if (p && p.name) set.add(String(p.name).trim()); });
+        history.forEach(h => { if (h && h.records) h.records.forEach(r => { if (r && r.name) set.add(String(r.name).trim()); }); });
         const names = Array.from(set).sort();
         if (names.length === 0) return alert('회원이 없습니다.');
         document.getElementById('modalMemberListContainer').innerHTML = names.map(n => `
             <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 6px; background: white; border-radius: 4px; margin-bottom: 4px; border: 1px solid var(--border-color);">
                 <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; width: 100%;">
-                    <input type="checkbox" class="member-filter-chk" data-name="${n}" ${!hiddenStatMembers[n] ? 'checked' : ''} style="width: 16px; height: 16px;">
+                    <input type="checkbox" class="member-filter-chk" data-name="${n}" ${!isMemberHidden(n) ? 'checked' : ''} style="width: 16px; height: 16px;">
                     <strong>${n}</strong>
                 </label>
             </div>
@@ -2116,8 +2151,16 @@
 
     function saveMemberFilterSettings() {
         let newH = {};
-        document.querySelectorAll('.member-filter-chk').forEach(c => { if (!c.checked) newH[c.getAttribute('data-name')] = true; });
-        db.ref('bowling_hiddenStatMembers').set(newH).then(() => { hiddenStatMembers = newH; closeMemberFilterModal(); updateStatistics(); alert('저장되었습니다.'); });
+        document.querySelectorAll('.member-filter-chk').forEach(c => {
+            const cleanName = String(c.getAttribute('data-name') || '').trim();
+            if (!c.checked && cleanName) newH[cleanName] = true;
+        });
+        db.ref('bowling_hiddenStatMembers').set(newH).then(() => {
+            hiddenStatMembers = newH;
+            closeMemberFilterModal();
+            updateStatistics();
+            alert('저장되었습니다.');
+        });
     }
 
     function exportClubStatsExcel() {
