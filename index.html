@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>🎳 Connection 볼링 클럽 점수관리 System</title>
     
     <link rel="manifest" href="manifest.json">
@@ -59,9 +62,9 @@
         button.secondary { background-color: #64748b; }
         button.success { background-color: #16a34a; }
         button.danger { background-color: #ef4444; }
+        button.warning { background-color: #d97706; }
         button.kakao-share { background-color: #fee500; color: #191919; font-weight: 600; }
 
-        /* 팀 선택 칩 버튼 스타일 */
         .team-count-group { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 12px; }
         .team-count-btn { background: #f1f5f9; color: #475569; border: 1px solid var(--border-color); padding: 6px 10px; font-size: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s; }
         .team-count-btn.active { background: var(--primary-color); color: white; border-color: var(--primary-color); }
@@ -104,6 +107,7 @@
         }
 
         .score-input { width: 45px; padding: 4px; text-align: center; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; }
+        .hist-edit-input { width: 46px; padding: 3px; text-align: center; border: 1px solid #2563eb; border-radius: 4px; font-size: 12px; background: #eff6ff; font-weight: 600; }
         
         .history-box { background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
         .team-mode-bar { display: flex; align-items: center; gap: 10px; background: #e2e8f0; padding: 10px; border-radius: 8px; margin-bottom: 10px; flex-wrap: wrap; font-size: 13px; }
@@ -187,7 +191,6 @@
     </div>
 
     <div id="main-tab" class="tab-content active">
-        <!-- 🚀 정모 시작 후 상단에 바로 노출되는 실시간 팀 매칭 & 스코어 카드 -->
         <div class="card" id="resultCard" style="display: none;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
                 <h3 id="resultCardTitle" style="margin: 0; font-size: 15px;">🎮 게임별 실시간 스코어 (개인전)</h3>
@@ -197,7 +200,6 @@
                 </div>
             </div>
 
-            <!-- 관리자용 최초 팀 편성 조작 컨트롤러 -->
             <div class="team-mode-bar" id="adminTeamControlPanel" style="display: none; background: #eff6ff; border: 1px solid #bfdbfe;">
                 <div style="font-weight: bold; color: #1e40af; width: 100%;">🛠️ [관리자] 1게임 최초 팀 편성 설정</div>
                 <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%;">
@@ -230,7 +232,7 @@
 
             <div style="margin-top: 20px;">
                 <h4 style="font-size: 14px; margin-bottom: 4px;">📝 4게임 스코어 입력</h4>
-                <div style="font-size: 11px; color: #64748b; margin-bottom: 8px;">💡 점수 입력 시 실시간 반영되며, 가로로 스크롤해도 선수명이 고정됩니다.</div>
+                <div style="font-size: 11px; color: #64748b; margin-bottom: 8px;">💡 점수 입력 시 실시간 반영되며, 가로로 스크롤해도 선수명이 고정됩니다. (일부 게임만 친 경우 안 친 게임은 비워두세요)</div>
                 <div style="overflow-x: auto;">
                     <table class="score-table">
                         <thead>
@@ -241,7 +243,7 @@
                                 <th id="thG3">3게임 (올커버/팀)</th>
                                 <th id="thG4">4게임 (올커버/팀)</th>
                                 <th>총점</th>
-                                <th>평균</th>
+                                <th>에버</th>
                             </tr>
                         </thead>
                         <tbody id="scoreTableBody"></tbody>
@@ -253,7 +255,6 @@
             </div>
         </div>
 
-        <!-- 회원명부 및 가입 승인 관리 카드 -->
         <div class="card" id="adminControlCard" style="display: none;">
             <h3 style="font-size: 15px; margin-top:0;">1. 회원명부 및 가입 승인 관리</h3>
             
@@ -433,6 +434,7 @@
                 <button class="success" onclick="exportAllDB()" style="padding: 6px 10px; font-size: 12px;">📥 백업 (CSV)</button>
                 <input type="file" id="csvFileInput" accept=".csv" style="display: none;" onchange="importCSV(event)">
                 <button class="secondary" onclick="checkPasswordAndExecute(() => document.getElementById('csvFileInput').click())" style="padding: 6px 10px; font-size: 12px;">📤 업로드</button>
+                <button class="secondary" onclick="normalizeAllHistoryDB()" style="background-color: #2563eb; padding: 6px 10px; font-size: 12px;">🔄 DB 에버 일괄교정</button>
                 <button class="secondary" onclick="changeAdminPassword()" style="background-color: #475569; padding: 6px 10px; font-size: 12px;">🔒 비번변경</button>
                 <button class="secondary" onclick="changeClubJoinPassword()" style="background-color: #0284c7; padding: 6px 10px; font-size: 12px;">🔑 인증번호</button>
                 <button class="secondary" onclick="openMemberFilterModal()" style="background-color: #d97706; padding: 6px 10px; font-size: 12px;">⚙️ 통계제외</button>
@@ -460,10 +462,15 @@
 </div>
 
 <script>
+    // 서비스 워커 캐시 강제 갱신 및 구버전 제거
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('service-worker.js')
-                .then(reg => console.log('Service Worker registered!'))
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                for (let reg of registrations) {
+                    reg.update();
+                }
+            });
+            navigator.serviceWorker.register('service-worker.js?v=' + Date.now())
                 .catch(err => console.log('Service Worker registration failed: ', err));
         });
     }
@@ -492,7 +499,7 @@
     let approvedKakaoIds = {};
     let adminPassword = "1950";  
     let clubJoinPassword = "1248"; 
-    let currentTeamCount = "4"; // 기본값 4팀
+    let currentTeamCount = "4"; 
     let isAdmin = false;
     let currentUser = null;
     
@@ -500,6 +507,7 @@
     let visibleHistoryCount = 3; 
     let isPlayerListExpanded = false;
     let currentGameTab = 1;
+    let editingHistoryIds = new Set(); // 현재 수정 중인 역대 기록 ID 집합
     
     let currentSortColumn = 'avg';
     let currentSortDirection = 'desc';
@@ -507,6 +515,43 @@
     let teamAvgChartInstance = null;
     let attendanceChartInstance = null;
     let indivAvgChartInstance = null;
+
+    // g1~g4 점수를 기준으로 총점과 유효 게임 수 에버리지를 정확하게 재계산
+    function getAccurateRecordStats(r) {
+        const g1 = parseFloat(r.g1) || 0;
+        const g2 = parseFloat(r.g2) || 0;
+        const g3 = parseFloat(r.g3) || 0;
+        const g4 = parseFloat(r.g4) || 0;
+        const total = g1 + g2 + g3 + g4;
+        const validGames = (g1 > 0 ? 1 : 0) + (g2 > 0 ? 1 : 0) + (g3 > 0 ? 1 : 0) + (g4 > 0 ? 1 : 0);
+        const avg = validGames > 0 ? parseFloat((total / validGames).toFixed(1)) : 0;
+        return { total, avg, validGames };
+    }
+
+    // DB 내 과거 기록 전체 정규화 (total, avg 불일치 교정 후 Firebase 저장)
+    function normalizeAllHistoryDB(silent = false) {
+        let changedCount = 0;
+        history.forEach(h => {
+            if (!Array.isArray(h.records)) return;
+            h.records.forEach(r => {
+                const stats = getAccurateRecordStats(r);
+                const newAvgStr = stats.avg.toFixed(1);
+                if (Number(r.total) !== stats.total || String(r.avg) !== newAvgStr) {
+                    r.total = stats.total;
+                    r.avg = newAvgStr;
+                    changedCount++;
+                }
+            });
+            h.records.sort((a, b) => b.total - a.total);
+        });
+
+        if (changedCount > 0) {
+            syncHistoryToDB();
+            if (!silent) alert(`총 ${changedCount}건의 과거 기록 에버리지 및 총점이 DB에 일괄 교정되었습니다.`);
+        } else if (!silent) {
+            alert('모든 DB 기록이 이미 최신 계산식과 일치합니다.');
+        }
+    }
 
     function loginWithGoogle() {
         const provider = new firebase.auth.GoogleAuthProvider();
@@ -597,6 +642,9 @@
             } else {
                 history = Object.values(rawData).filter(h => h && h.date && Array.isArray(h.records));
             }
+            if (isAdmin) {
+                normalizeAllHistoryDB(true);
+            }
             populateTargetMonthSelect();
             populateHistoryMonthDropdown();
             populateHistoryTeamRangeSelects();
@@ -685,9 +733,11 @@
         if (inputPwd === adminPassword) {
             isAdmin = true;
             currentUser = { id: 'admin_master', name: '관리자' };
-            alert("관리자 권한으로 로그인되었습니다.");
+            normalizeAllHistoryDB(true);
+            alert("관리자 권한으로 로그인되었습니다. (과거 DB 에버 자동 교정 완료)");
             checkAuthAndRender();
             updateAuthUI();
+            renderHistory();
         } else {
             alert("관리자 비밀번호가 일치하지 않습니다.");
         }
@@ -823,7 +873,8 @@
 
         let text = `🎳 [Bowling Connection 정모 결과]\n📅 날짜: ${recordObj.date}\n\n`;
         recordObj.records.forEach((r, idx) => {
-            text += `${idx + 1}위 ${r.name} | 1G:${r.g1} 2G:${r.g2} 3G:${r.g3} 4G:${r.g4} | 총점:${r.total} (에버:${r.avg})\n`;
+            const stats = getAccurateRecordStats(r);
+            text += `${idx + 1}위 ${r.name} | 1G:${r.g1} 2G:${r.g2} 3G:${r.g3} 4G:${r.g4} | 총점:${stats.total} (에버:${stats.avg.toFixed(1)})\n`;
         });
 
         if (navigator.share) {
@@ -897,15 +948,19 @@
             if (inputPwd === null) return;
             if (inputPwd === adminPassword) {
                 isAdmin = true;
-                alert("관리자 모드 전환");
+                normalizeAllHistoryDB(true);
+                alert("관리자 모드 전환 (과거 DB 에버 자동 교정 완료)");
                 updateAuthUI();
+                renderHistory();
             } else {
                 alert("비밀번호 불일치");
             }
         } else {
             isAdmin = false;
+            editingHistoryIds.clear();
             alert("일반 회원 모드 전환");
             updateAuthUI();
+            renderHistory();
         }
     }
 
@@ -1006,7 +1061,10 @@
             if (endMonth !== 'all' && hm > endMonth) return;
 
             const record = h.records.find(r => r.name === memberName);
-            if (record && parseFloat(record.avg) > 0) { totalSum += parseFloat(record.avg); count++; }
+            if (record) {
+                const stats = getAccurateRecordStats(record);
+                if (stats.avg > 0) { totalSum += stats.avg; count++; }
+            }
         });
         return count > 0 ? parseFloat((totalSum / count).toFixed(1)) : null;
     }
@@ -1294,12 +1352,10 @@
         document.getElementById('resultCardTitle').innerText = isSolo ? '🎮 게임별 실시간 스코어 (개인전)' : `🎮 게임별 실시간 팀 매칭 & 스코어 (${currentTeamCount}팀)`;
 
         if (isSolo) {
-            for (let g = 1; g <= 4; g++) {
-                document.getElementById(`thG1`).innerText = '1게임 (올커버)';
-                document.getElementById(`thG2`).innerText = '2게임 (올커버)';
-                document.getElementById(`thG3`).innerText = '3게임 (올커버)';
-                document.getElementById(`thG4`).innerText = '4게임 (올커버)';
-            }
+            document.getElementById(`thG1`).innerText = '1게임 (올커버)';
+            document.getElementById(`thG2`).innerText = '2게임 (올커버)';
+            document.getElementById(`thG3`).innerText = '3게임 (올커버)';
+            document.getElementById(`thG4`).innerText = '4게임 (올커버)';
             matchResults.forEach(p => {
                 for (let g = 1; g <= 4; g++) {
                     let badgeElem = document.getElementById(`team_badge_g${g}_${p.id}`);
@@ -1434,8 +1490,11 @@
                 const c2 = document.querySelector(`input.cover-checkbox[data-id="${p.id}"][data-game="2"]`).checked;
                 const c3 = document.querySelector(`input.cover-checkbox[data-id="${p.id}"][data-game="3"]`).checked;
                 const c4 = document.querySelector(`input.cover-checkbox[data-id="${p.id}"][data-game="4"]`).checked;
-                const total = g1 + g2 + g3 + g4;
-                return { name: p.name, g1, g2, g3, g4, c1, c2, c3, c4, total, avg: total > 0 ? (total / 4).toFixed(1) : '0.0', coverCount: (c1?1:0)+(c2?1:0)+(c3?1:0)+(c4?1:0) };
+                
+                const stats = getAccurateRecordStats({ g1, g2, g3, g4 });
+                const coverCount = (c1?1:0)+(c2?1:0)+(c3?1:0)+(c4?1:0);
+
+                return { name: p.name, g1, g2, g3, g4, c1, c2, c3, c4, total: stats.total, avg: stats.avg.toFixed(1), coverCount };
             });
             records.sort((a, b) => b.total - a.total);
 
@@ -1458,6 +1517,64 @@
         });
     }
 
+    // 역대 정모 기록 인라인 수정 모드 진입
+    function startEditHistory(id) {
+        checkPasswordAndExecute(() => {
+            editingHistoryIds.add(id);
+            renderHistory();
+        });
+    }
+
+    // 역대 정모 기록 수정 취소
+    function cancelEditHistory(id) {
+        editingHistoryIds.delete(id);
+        renderHistory();
+    }
+
+    // 역대 정모 기록 인라인 입력 시 총점/에버 실시간 프리뷰
+    function previewHistoryRowEdit(histId, playerName) {
+        const g1 = parseFloat(document.querySelector(`.hist-edit-input[data-hid="${histId}"][data-name="${playerName}"][data-g="1"]`)?.value) || 0;
+        const g2 = parseFloat(document.querySelector(`.hist-edit-input[data-hid="${histId}"][data-name="${playerName}"][data-g="2"]`)?.value) || 0;
+        const g3 = parseFloat(document.querySelector(`.hist-edit-input[data-hid="${histId}"][data-name="${playerName}"][data-g="3"]`)?.value) || 0;
+        const g4 = parseFloat(document.querySelector(`.hist-edit-input[data-hid="${histId}"][data-name="${playerName}"][data-g="4"]`)?.value) || 0;
+
+        const stats = getAccurateRecordStats({ g1, g2, g3, g4 });
+        const totCell = document.getElementById(`hist_edit_tot_${histId}_${playerName}`);
+        const avgCell = document.getElementById(`hist_edit_avg_${histId}_${playerName}`);
+        if (totCell) totCell.innerText = stats.total;
+        if (avgCell) avgCell.innerText = stats.avg.toFixed(1);
+    }
+
+    // 역대 정모 기록 수정 내용 DB 즉시 저장
+    function saveEditedHistory(id) {
+        const histObj = history.find(h => h.id === id);
+        if (!histObj) return;
+
+        histObj.records.forEach(r => {
+            const inp1 = document.querySelector(`.hist-edit-input[data-hid="${id}"][data-name="${r.name}"][data-g="1"]`);
+            const inp2 = document.querySelector(`.hist-edit-input[data-hid="${id}"][data-name="${r.name}"][data-g="2"]`);
+            const inp3 = document.querySelector(`.hist-edit-input[data-hid="${id}"][data-name="${r.name}"][data-g="3"]`);
+            const inp4 = document.querySelector(`.hist-edit-input[data-hid="${id}"][data-name="${r.name}"][data-g="4"]`);
+
+            if (inp1 && inp2 && inp3 && inp4) {
+                r.g1 = parseFloat(inp1.value) || 0;
+                r.g2 = parseFloat(inp2.value) || 0;
+                r.g3 = parseFloat(inp3.value) || 0;
+                r.g4 = parseFloat(inp4.value) || 0;
+                const stats = getAccurateRecordStats(r);
+                r.total = stats.total;
+                r.avg = stats.avg.toFixed(1);
+            }
+        });
+
+        histObj.records.sort((a, b) => b.total - a.total);
+        editingHistoryIds.delete(id);
+        syncHistoryToDB();
+        renderHistory();
+        updateStatistics();
+        alert('수정된 점수와 에버리지가 DB에 저장되었습니다!');
+    }
+
     function renderHistory(dataToRender = history) {
         const container = document.getElementById('historyContainer');
         const loadMoreContainer = document.getElementById('loadMoreContainer');
@@ -1477,21 +1594,48 @@
             }
             if (filteredRecords.length === 0) return '';
 
+            const isEditing = editingHistoryIds.has(h.id);
+
+            const actionButtons = isEditing
+                ? `
+                    <button class="success" onclick="saveEditedHistory(${h.id})" style="padding: 3px 8px; font-size: 11px;">💾 저장</button>
+                    <button class="secondary" onclick="cancelEditHistory(${h.id})" style="padding: 3px 8px; font-size: 11px;">취소</button>
+                  `
+                : `
+                    ${isAdmin ? `<button class="warning" onclick="startEditHistory(${h.id})" style="padding: 3px 7px; font-size: 11px;">✏️ 수정</button>` : ''}
+                    <button class="success" onclick="shareHistoryRecordAsImage(${h.id})" style="padding: 3px 6px; font-size: 11px; background-color: #16a34a;">📷 이미지 공유</button>
+                    <button class="kakao-share" onclick="shareHistoryRecordToKakao(${h.id})" style="padding: 3px 6px; font-size: 11px;">💬 텍스트공유</button>
+                    <button class="success" onclick="exportToExcel(${h.id})" style="padding: 3px 6px; font-size: 11px;">📥 엑셀</button>
+                    ${isAdmin ? `<button class="delete-btn" onclick="checkPasswordAndExecute(() => deleteHistory(${h.id}))" style="padding: 3px 6px; font-size: 11px;">삭제</button>` : ''}
+                  `;
+
             return `
-            <div class="history-box" id="history_box_${h.id}">
+            <div class="history-box" id="history_box_${h.id}" style="${isEditing ? 'border: 2px solid #2563eb; background: #eff6ff;' : ''}">
                 <div style="display: flex; justify-content: space-between; border-bottom: 2px solid var(--primary-color); padding-bottom: 4px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; gap: 6px;">
-                    <strong style="font-size: 14px; color: var(--primary-color);">📅 ${h.date}</strong>
-                    <div class="history-btn-group" style="display: flex; gap: 4px;">
-                        <button class="success" onclick="shareHistoryRecordAsImage(${h.id})" style="padding: 3px 6px; font-size: 11px; background-color: #16a34a;">📷 이미지 공유</button>
-                        <button class="kakao-share" onclick="shareHistoryRecordToKakao(${h.id})" style="padding: 3px 6px; font-size: 11px;">💬 텍스트공유</button>
-                        <button class="success" onclick="exportToExcel(${h.id})" style="padding: 3px 6px; font-size: 11px;">📥 엑셀</button>
-                        <button class="delete-btn" onclick="checkPasswordAndExecute(() => deleteHistory(${h.id}))" style="padding: 3px 6px; font-size: 11px;">삭제</button>
+                    <strong style="font-size: 14px; color: var(--primary-color);">📅 ${h.date} ${isEditing ? '<span style="font-size:11px; color:#d97706;">(수정 모드 - 안 친 게임은 0 또는 빈칸)</span>' : ''}</strong>
+                    <div class="history-btn-group" style="display: flex; gap: 4px; flex-wrap: wrap;">
+                        ${actionButtons}
                     </div>
                 </div>
                 <div style="overflow-x: auto;">
                     <table class="score-table" style="background: white;">
                         <thead><tr><th>순위</th><th>이름</th><th>1G</th><th>2G</th><th>3G</th><th>4G</th><th>총점</th><th>에버</th></tr></thead>
-                        <tbody>${filteredRecords.map((r, i) => `<tr><td><strong>${i + 1}위</strong></td><td><strong>${r.name}</strong></td><td>${r.g1}</td><td>${r.g2}</td><td>${r.g3}</td><td>${r.g4}</td><td><strong>${r.total}</strong></td><td>${r.avg}</td></tr>`).join('')}</tbody>
+                        <tbody>${filteredRecords.map((r, i) => {
+                            const stats = getAccurateRecordStats(r);
+                            if (isEditing) {
+                                return `<tr>
+                                    <td><strong>${i + 1}위</strong></td>
+                                    <td><strong>${r.name}</strong></td>
+                                    <td><input type="number" class="hist-edit-input" data-hid="${h.id}" data-name="${r.name}" data-g="1" value="${r.g1 || ''}" oninput="previewHistoryRowEdit(${h.id}, '${r.name}')"></td>
+                                    <td><input type="number" class="hist-edit-input" data-hid="${h.id}" data-name="${r.name}" data-g="2" value="${r.g2 || ''}" oninput="previewHistoryRowEdit(${h.id}, '${r.name}')"></td>
+                                    <td><input type="number" class="hist-edit-input" data-hid="${h.id}" data-name="${r.name}" data-g="3" value="${r.g3 || ''}" oninput="previewHistoryRowEdit(${h.id}, '${r.name}')"></td>
+                                    <td><input type="number" class="hist-edit-input" data-hid="${h.id}" data-name="${r.name}" data-g="4" value="${r.g4 || ''}" oninput="previewHistoryRowEdit(${h.id}, '${r.name}')"></td>
+                                    <td id="hist_edit_tot_${h.id}_${r.name}" style="font-weight:bold; color:#1e40af;">${stats.total}</td>
+                                    <td id="hist_edit_avg_${h.id}_${r.name}" style="font-weight:bold; color:#16a34a;">${stats.avg.toFixed(1)}</td>
+                                </tr>`;
+                            }
+                            return `<tr><td><strong>${i + 1}위</strong></td><td><strong>${r.name}</strong></td><td>${r.g1 || '-'}</td><td>${r.g2 || '-'}</td><td>${r.g3 || '-'}</td><td>${r.g4 || '-'}</td><td><strong>${stats.total}</strong></td><td>${stats.avg.toFixed(1)}</td></tr>`;
+                        }).join('')}</tbody>
                     </table>
                 </div>
             </div>`;
@@ -1524,7 +1668,10 @@
         const record = history.find(h => h.id === id);
         if (!record) return;
         let csvContent = '\uFEFF' + "날짜,순위,선수명,1게임,2게임,3게임,4게임,총점,에버리지\n";
-        record.records.forEach((r, idx) => { csvContent += `${record.date},${idx + 1}위,${r.name},${r.g1},${r.g2},${r.g3},${r.g4},${r.total},${r.avg}\n`; });
+        record.records.forEach((r, idx) => {
+            const stats = getAccurateRecordStats(r);
+            csvContent += `${record.date},${idx + 1}위,${r.name},${r.g1},${r.g2},${r.g3},${r.g4},${stats.total},${stats.avg.toFixed(1)}\n`;
+        });
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `기록.csv`; link.click();
     }
@@ -1532,7 +1679,10 @@
     function exportAllDB() {
         if (history.length === 0) return alert('데이터가 없습니다.');
         let csvContent = '\uFEFF' + "날짜,순위,선수명,1게임,2게임,3게임,4게임,총점,에버리지\n";
-        history.forEach(h => { h.records.forEach((r, idx) => { csvContent += `${h.date},${idx + 1}위,${r.name},${r.g1},${r.g2},${r.g3},${r.g4},${r.total},${r.avg}\n`; }); });
+        history.forEach(h => { h.records.forEach((r, idx) => {
+            const stats = getAccurateRecordStats(r);
+            csvContent += `${h.date},${idx + 1}위,${r.name},${r.g1},${r.g2},${r.g3},${r.g4},${stats.total},${stats.avg.toFixed(1)}\n`;
+        }); });
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `전체백업.csv`; link.click();
     }
@@ -1555,13 +1705,12 @@
                     let dateStr = cols[0].includes('-') ? cols[0] : cols[1];
                     let name = cols[2];
                     let g1 = parseFloat(cols[3]) || 0, g2 = parseFloat(cols[4]) || 0, g3 = parseFloat(cols[5]) || 0, g4 = parseFloat(cols[6]) || 0;
-                    let total = g1 + g2 + g3 + g4;
-                    let avg = total > 0 ? (total / 4).toFixed(1) : '0.0';
+                    const stats = getAccurateRecordStats({ g1, g2, g3, g4 });
                     if (!map[dateStr]) map[dateStr] = [];
                     let recs = map[dateStr];
                     let existing = recs.find(r => r.name === name);
-                    if (existing) Object.assign(existing, { g1, g2, g3, g4, total, avg });
-                    else recs.push({ name, g1, g2, g3, g4, total, avg, coverCount: 0 });
+                    if (existing) Object.assign(existing, { g1, g2, g3, g4, total: stats.total, avg: stats.avg.toFixed(1) });
+                    else recs.push({ name, g1, g2, g3, g4, total: stats.total, avg: stats.avg.toFixed(1), coverCount: 0 });
                 }
                 history = Object.keys(map).map(date => ({ id: new Date(date.split(' ')[0]).getTime() || Date.now(), date, records: map[date] }));
                 syncHistoryToDB();
@@ -1617,7 +1766,12 @@
         let totalSum = 0, totalCount = 0;
         const teamAvgs = chrono.map(h => {
             let hSum = 0, valid = 0;
-            h.records.forEach(r => { if (!hiddenStatMembers[r.name] && parseFloat(r.avg) > 0) { hSum += parseFloat(r.avg); totalSum += parseFloat(r.avg); totalCount++; valid++; } });
+            h.records.forEach(r => {
+                if (!hiddenStatMembers[r.name]) {
+                    const stats = getAccurateRecordStats(r);
+                    if (stats.avg > 0) { hSum += stats.avg; totalSum += stats.avg; totalCount++; valid++; }
+                }
+            });
             return valid > 0 ? (hSum / valid).toFixed(1) : 0;
         });
         document.getElementById('statOverallAvg').innerText = totalCount > 0 ? `${(totalSum / totalCount).toFixed(1)}` : '0';
@@ -1670,11 +1824,12 @@
         const avgs = chrono.map(h => {
             const r = h.records.find(rec => rec.name === name);
             if (r) {
+                const stats = getAccurateRecordStats(r);
                 attend++;
-                if (parseFloat(r.avg) > 0) { sumAvg += parseFloat(r.avg); validG++; }
-                [r.g1, r.g2, r.g3, r.g4].forEach(g => { if (g > high) high = g; });
+                if (stats.avg > 0) { sumAvg += stats.avg; validG++; }
+                [r.g1, r.g2, r.g3, r.g4].forEach(g => { if (parseFloat(g) > high) high = parseFloat(g); });
                 covers += (r.coverCount !== undefined ? r.coverCount : ((r.c1?1:0)+(r.c2?1:0)+(r.c3?1:0)+(r.c4?1:0)));
-                return parseFloat(r.avg);
+                return stats.avg;
             }
             return null;
         });
@@ -1706,8 +1861,9 @@
         let map = {};
         filteredH.forEach(h => h.records.forEach(r => {
             if (hiddenStatMembers[r.name]) return;
+            const stats = getAccurateRecordStats(r);
             if (!map[r.name]) map[r.name] = { name: r.name, sum: 0, count: 0, high: 0, low: 999, games: 0 };
-            if (parseFloat(r.avg) > 0) { map[r.name].sum += parseFloat(r.avg); map[r.name].count++; }
+            if (stats.avg > 0) { map[r.name].sum += stats.avg; map[r.name].count++; }
             [r.g1, r.g2, r.g3, r.g4].forEach(g => {
                 let s = parseFloat(g);
                 if (s > 0) { if (s > map[r.name].high) map[r.name].high = s; if (s < map[r.name].low) map[r.name].low = s; map[r.name].games++; }
@@ -1791,4 +1947,3 @@
 
 </body>
 </html>
-
