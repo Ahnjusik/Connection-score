@@ -47,7 +47,6 @@
         .club-logo { width: 55px; height: 55px; object-fit: contain; border-radius: 50%; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); background: white; padding: 3px; border: 2px solid var(--border-color); }
         h1 { color: var(--primary-color); margin: 0; font-size: 20px; text-align: center; }
 
-        /* 포그라운드(앱 실행 중) 실시간 알림 토스트 배너 */
         #inAppToast {
             position: fixed;
             top: 14px;
@@ -620,7 +619,6 @@
     firebase.initializeApp(_fbConfig);
     const db = firebase.database();
 
-    // 포그라운드(앱 화면이 켜진 상태) 푸시 수신 핸들러
     let foregroundMessagingInitialized = false;
     function initForegroundPushListener() {
         if (foregroundMessagingInitialized) return;
@@ -633,10 +631,8 @@
                     const title = notif.title || data.title || '🎳 Bowling Connection 알림';
                     const body = notif.body || data.body || '새로운 소식이 등록되었습니다.';
 
-                    // 1. 인앱 토스트 배너 표시
                     showInAppToast(title, body);
 
-                    // 2. OS 상단 알림바에도 동시에 띄우기
                     if (Notification.permission === 'granted' && navigator.serviceWorker) {
                         navigator.serviceWorker.ready.then((reg) => {
                             reg.showNotification(title, {
@@ -685,6 +681,620 @@
     let draftNoticeImageData = '';
     let editingNoticeId = null;
     let editingNoticeImageData = '';
+    let pushConfig = { gasUrl: '', pushSecret: '', vapidKey: '' };
+    let currentTeamCount = "4"; 
+    let isAdmin = false;
+    let isSuperAdmin = false;
+    let currentUser = null;
+    
+    let prevCustomTeamSpinnerVal = null;
+    let lastPushSentAt = 0;
+
+    let allPlayerNames = []; 
+    let visibleHistoryCount = 3; 
+    let isPlayerListExpanded = false;
+    let currentGameTab = 1;
+    let editingHistoryIds = new Set();
+    let draftHistoryAdditions = {};
+    let draftHistoryDeletions = {};
+    
+    let currentSortColumn = 'avg';
+    let currentSortDirection = 'desc';
+    
+    let teamAvgChartInstance = null;
+    let attendanceChartInstance = null;
+    let indivAvgChartInstance = null;
+
+    function escapeHtml(str) {
+        return String(str || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function isMemberHidden(name) {
+        if (!name || !hiddenStatMembers) return false;
+        const clean = String(name).trim();
+        if (hiddenStatMembers[clean] === true || hiddenStatMembers[name] === true) return true;
+        return Object.keys(hiddenStatMembers).some(k => hiddenStatMembers[k] === true && k.trim() === clean);
+    }
+
+    function hasAdminPrivilege(user) {
+        if (!user) return false;
+        const emailLower = String(user.email || '').toLowerCase();
+        if (PRIMARY_ADMIN_EMAILS.includes(emailLower)) return true;
+        if (user.uid && subAdmins && subAdmins[user.uid] === true) return true;
+        return false;
+    }
+
+    function checkPrimaryAdmin(user) {
+        if (!user || !user.email) return false;
+        return PRIMARY_ADMIN_EMAILS.includes(String(user.email).toLowerCase());
+    }
+
+    function getAccurateRecordStats(r) {
+        const g1 = parseFloat(r.g1) || 0;
+        const g2 = parseFloat(r.g2) || 0;
+        const g3 = parseFloat(r.g3) || 0;
+        const g4 = parseFloat(r.g4) || 0;
+        const total = g1 + g2 + g3 + g4;
+        const validGames = (g1 > 0 ? 1 : 0) + (g2 > 0 ? 1 : 0) + (g3 > 0 ? 1 : 0) + (g4 > 0 ? 1 : 0);
+        const avg = validGames > 0 ? parseFloat((total / validGames).toFixed(1)) : 0;
+        return { total, avg, validGames };
+    }
+
+    function normalizeAllHistoryDB(silent = false) {
+        if (!isAdmin) return;
+        let changedCount = 0;
+        history.forEach(h => {
+            if (!Array.isArray(h.records)) return;
+            h.records.forEach(r => {
+                const stats = getAccurateRecordStats(r);
+                const newAvgStr = stats.avg.toFixed(1);
+                if (Number(r.total) !== stats.total || String(r.avg) !== newAvgStr) {
+                    r.total = stats.total;
+                    r.avg = newAvgStr;
+                    changedCount++;
+                }
+            });
+            h.records.sort((a, b) => b.total - a.total);
+        });
+
+        if (changedCount > 0) {
+            syncHistoryToDB();
+            if (!silent) alert(`총 ${changedCount}건의 과거 기록 에버리지 및 총점이 DB에 일괄 교정되었습니다.`);
+        } else if (!silent) {
+            alert('모든 DB 기록이 이미 최신 계산식과 일치합니다.');
+        }
+    }
+
+    function loginWithGoogle() {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        firebase.auth().signInWithPopup(provider).catch((error) => {
+            console.error("로그인 에러:", error);
+            alert("로그인 중 오류가 발생했습니다: " + error.message);
+        });
+    }
+
+    function registerNewGoogleUser(user) {
+        const name = prompt("본인의 클럽 회원 이름을 정확히 입력해주세요:\n(입력 후 관리자가 승인하면 즉시 입장됩니다)", user.displayName || "");
+        if (!name || !name.trim()) { firebase.auth().signOut(); return; }
+        
+        const cleanName = name.trim().slice(0, 20);
+        db.ref('bowling_pendingApprovals/' + user.uid).set({
+            name: cleanName,
+            email: user.email || '',
+            requestedAt: new Date().toLocaleString()
+        }).then(() => {
+            currentUser = { uid: user.uid, id: user.uid, name: cleanName, email: user.email || '' };
+            checkAuthAndRender();
+        });
+    }
+
+    function checkExistingPushTokenStatus(uid) {
+        if (!uid) return;
+        db.ref(`bowling_fcmTokens/${uid}`).once('value').then((snap) => {
+            const btn = document.getElementById('pushEnableBtn');
+            if (!btn) return;
+            if (snap.exists() && snap.val().token && Notification.permission === 'granted') {
+                btn.innerText = '🔔 알림 설정됨';
+                btn.style.background = '#16a34a';
+                initForegroundPushListener();
+            } else {
+                btn.innerText = '🔔 알림 허용';
+                btn.style.background = '#0284c7';
+            }
+        });
+    }
+
+    window.onload = async function() {
+        initForegroundPushListener();
+
+        firebase.auth().onAuthStateChanged((user) => {
+            if (user) {
+                const uid = user.uid;
+                const email = user.email || '';
+                isSuperAdmin = checkPrimaryAdmin(user);
+
+                db.ref('bowling_approvedKakaoIds/' + uid).once('value').then((snap) => {
+                    const approvedName = snap.val();
+                    if (isSuperAdmin) {
+                        const displayName = approvedName || user.displayName || '기본 관리자';
+                        if (!approvedName) {
+                            db.ref('bowling_approvedKakaoIds/' + uid).set(displayName);
+                        }
+                        currentUser = { uid, id: uid, name: displayName, email };
+                        isAdmin = true;
+                        checkAuthAndRender();
+                        checkExistingPushTokenStatus(uid);
+                    } else if (approvedName) {
+                        currentUser = { uid, id: uid, name: approvedName, email };
+                        isAdmin = hasAdminPrivilege(currentUser);
+                        checkAuthAndRender();
+                        checkExistingPushTokenStatus(uid);
+                    } else {
+                        db.ref('bowling_pendingApprovals/' + uid).once('value').then((pSnap) => {
+                            if (pSnap.exists()) {
+                                currentUser = { uid, id: uid, name: pSnap.val().name, email };
+                                checkAuthAndRender();
+                            } else {
+                                registerNewGoogleUser(user);
+                            }
+                        });
+                    }
+                });
+            } else {
+                currentUser = null;
+                isAdmin = false;
+                isSuperAdmin = false;
+                checkAuthAndRender();
+            }
+        });
+
+        db.ref('bowling_approvedKakaoIds').on('value', (snapshot) => {
+            approvedUsers = snapshot.val() || {};
+            if (currentUser) checkAuthAndRender();
+        });
+
+        db.ref('bowling_admins').on('value', (snapshot) => {
+            subAdmins = snapshot.val() || {};
+            if (currentUser) {
+                if (!hasAdminPrivilege(currentUser)) isAdmin = false;
+                checkAuthAndRender();
+            }
+        });
+
+        db.ref('bowling_pendingApprovals').on('value', (snapshot) => {
+            pendingApprovals = snapshot.val() || {};
+            if (currentUser) checkAuthAndRender();
+            renderPendingApprovals();
+        });
+
+        db.ref('bowling_notices').on('value', (snapshot) => {
+            const raw = snapshot.val() || [];
+            clubNotices = Array.isArray(raw) ? raw.filter(Boolean) : Object.values(raw).filter(Boolean);
+            clubNotices.sort((a, b) => (b.id || 0) - (a.id || 0));
+            renderClubNotices();
+        });
+
+        db.ref('bowling_pushConfig').on('value', (snapshot) => {
+            pushConfig = snapshot.val() || { gasUrl: '', pushSecret: '', vapidKey: '' };
+        });
+
+        db.ref('bowling_players').on('value', (snapshot) => {
+            players = snapshot.val() || [];
+            populateTargetMonthSelect();
+            renderPlayerList();
+            updateStatistics();
+            document.getElementById('loadingMsg').style.display = 'none';
+        });
+
+        db.ref('bowling_history').on('value', (snapshot) => {
+            const rawData = snapshot.val() || [];
+            if (Array.isArray(rawData)) {
+                history = rawData.filter(h => h && h.date && Array.isArray(h.records));
+            } else {
+                history = Object.values(rawData).filter(h => h && h.date && Array.isArray(h.records));
+            }
+            if (isAdmin) normalizeAllHistoryDB(true);
+            populateTargetMonthSelect();
+            populateHistoryMonthDropdown();
+            populateHistoryTeamRangeSelects();
+            populateAttendanceMonthSelects();
+            populateIndivMonthSelects();
+            populateClubStatMonthSelects();
+            renderPlayerList();
+            renderHistory();
+            updateStatistics();
+        });
+
+        db.ref('bowling_hiddenStatMembers').on('value', (snapshot) => {
+            const rawHidden = snapshot.val() || {};
+            const normalizedHidden = {};
+            Object.keys(rawHidden).forEach(k => {
+                if (rawHidden[k] === true) normalizedHidden[k.trim()] = true;
+            });
+            hiddenStatMembers = normalizedHidden;
+            updateStatistics();
+        });
+
+        db.ref('bowling_teamCount').on('value', (snapshot) => {
+            const count = snapshot.val();
+            if (count) {
+                currentTeamCount = String(count);
+                updateTeamCountUI(currentTeamCount);
+            }
+        });
+
+        db.ref('bowling_publishedTeamSettings').on('value', (snapshot) => {
+            const settings = snapshot.val();
+            if (settings) {
+                publishedTeamSettings = settings;
+                updatePublishedModeUI();
+                computeAndRenderTeams();
+            }
+        });
+
+        db.ref('bowling_liveScores').on('value', (snapshot) => {
+            liveScores = snapshot.val() || {};
+            const activePlayers = players.filter(p => p.checked);
+            if (activePlayers.length > 0 && document.getElementById('resultCard').style.display === 'block') {
+                updateScoreTableInputsFromLive(activePlayers);
+            }
+        });
+
+        db.ref('bowling_matchActive').on('value', (snapshot) => {
+            const isActive = snapshot.val();
+            if (isActive) {
+                db.ref('bowling_activePlayers').once('value', (snap) => {
+                    const activeList = snap.val() || players.filter(p => p.checked);
+                    matchResults = activeList;
+                    renderScoreTable(matchResults);
+                    populateHistoryTeamRangeSelects();
+                    document.getElementById('waitingNoticeCard').style.display = 'none';
+                    document.getElementById('resultCard').style.display = 'block';
+                });
+            } else {
+                document.getElementById('resultCard').style.display = 'none';
+                document.getElementById('waitingNoticeCard').style.display = 'block';
+            }
+        });
+    };
+
+    function handleCustomTeamSpinnerInput(inputEl) {
+        const raw = inputEl.value;
+        if (raw === '') {
+            prevCustomTeamSpinnerVal = null;
+            return;
+        }
+        const num = parseInt(raw, 10);
+        if (isNaN(num)) return;
+
+        if (num <= 1) {
+            inputEl.value = '2';
+            prevCustomTeamSpinnerVal = 2;
+            return;
+        }
+        prevCustomTeamSpinnerVal = num;
+    }
+
+    function applyCustomTeamCount(rawVal) {
+        const inputEl = document.getElementById('customTeamCountInput');
+        const trimmed = String(rawVal || '').trim();
+        const parsed = parseInt(trimmed, 10);
+
+        if (trimmed === '' || isNaN(parsed) || parsed <= 1) {
+            if (inputEl) inputEl.value = '2';
+            prevCustomTeamSpinnerVal = 2;
+            changeTeamCount('2');
+            return;
+        }
+        prevCustomTeamSpinnerVal = parsed;
+        changeTeamCount(String(parsed));
+    }
+
+    function changeTeamCount(val) {
+        if (!val) return;
+        currentTeamCount = String(val);
+        updateTeamCountUI(currentTeamCount);
+        db.ref('bowling_teamCount').set(currentTeamCount);
+        updateAuthUI();
+        computeAndRenderTeams();
+    }
+
+    function updateTeamCountUI(val) {
+        const strVal = String(val);
+        const quickBtns = document.querySelectorAll('.team-count-btn');
+        let matchedQuick = false;
+        quickBtns.forEach(btn => {
+            if (btn.getAttribute('data-value') === strVal) {
+                btn.classList.add('active');
+                matchedQuick = true;
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+        const customInput = document.getElementById('customTeamCountInput');
+        if (customInput) {
+            if (!matchedQuick && strVal !== 'solo') {
+                customInput.value = strVal;
+                prevCustomTeamSpinnerVal = parseInt(strVal, 10) || 2;
+                customInput.classList.add('active');
+            } else {
+                customInput.value = '';
+                prevCustomTeamSpinnerVal = null;
+                customInput.classList.remove('active');
+            }
+        }
+    }
+
+    function applyAvgPreset(presetKey) {
+        document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+        const activeBtn = document.getElementById(`preset_${presetKey}`);
+        if (activeBtn) activeBtn.classList.add('active');
+
+        const startSelect = document.getElementById('targetStartMonthSelect');
+        const endSelect = document.getElementById('targetEndMonthSelect');
+        if (!startSelect || !endSelect) return;
+
+        const months = Array.from(startSelect.options)
+            .map(o => o.value)
+            .filter(v => v && v !== 'all')
+            .sort();
+
+        if (presetKey === 'all' || months.length === 0) {
+            startSelect.value = 'all';
+            endSelect.value = 'all';
+        } else {
+            const countMap = { '1m': 1, '3m': 3, '6m': 6 };
+            const n = countMap[presetKey] || 3;
+            const startIdx = Math.max(0, months.length - n);
+            startSelect.value = months[startIdx];
+            endSelect.value = months[months.length - 1];
+        }
+        refreshPlayerScoresByMonth();
+    }
+
+    function onTargetMonthManualChange() {
+        document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+        refreshPlayerScoresByMonth();
+    }
+
+    function logoutSession() {
+        firebase.auth().signOut().then(() => {
+            isAdmin = false;
+            isSuperAdmin = false;
+            currentUser = null;
+            location.reload();
+        });
+    }
+
+    function checkAuthAndRender() {
+        if (!currentUser) {
+            document.getElementById('authOverlay').style.display = 'flex';
+            document.getElementById('loginCardView').style.display = 'block';
+            document.getElementById('pendingCardView').style.display = 'none';
+            document.getElementById('mainContainer').style.display = 'none';
+            return;
+        }
+
+        const isApproved = isSuperAdmin || approvedUsers[currentUser.uid] || Object.values(approvedUsers).includes(currentUser.name);
+        if (isApproved) {
+            document.getElementById('authOverlay').style.display = 'none';
+            document.getElementById('mainContainer').style.display = 'block';
+            document.getElementById('userInfoDisplay').innerText = `(${currentUser.name})`;
+            updateAuthUI();
+            return;
+        }
+
+        document.getElementById('authOverlay').style.display = 'flex';
+        document.getElementById('loginCardView').style.display = 'none';
+        document.getElementById('pendingCardView').style.display = 'block';
+        document.getElementById('mainContainer').style.display = 'none';
+        document.getElementById('pendingNameDisplay').innerText = currentUser.name;
+    }
+
+    function toggleAuthMode() {
+        if (!hasAdminPrivilege(currentUser)) {
+            alert('관리자 권한이 지정된 구글 계정만 관리자 모드로 전환할 수 있습니다.');
+            return;
+        }
+        isAdmin = !isAdmin;
+        if (!isAdmin) {
+            editingHistoryIds.clear();
+            draftHistoryAdditions = {};
+            draftHistoryDeletions = {};
+            editingNoticeId = null;
+            editingNoticeImageData = '';
+        } else {
+            normalizeAllHistoryDB(true);
+        }
+        updateAuthUI();
+        renderHistory();
+    }
+
+    function updateAuthUI() {
+        const indicator = document.getElementById('modeIndicator');
+        const switchBtn = document.getElementById('authSwitchBtn');
+        const adminControlCard = document.getElementById('adminControlCard');
+        const adminDBControlCard = document.getElementById('adminDBControlCard');
+        const adminNoticeComposeCard = document.getElementById('adminNoticeComposeCard');
+        const saveRecordContainer = document.getElementById('saveRecordContainer');
+        const cancelMatchBtn = document.getElementById('cancelMatchBtn');
+        const adminTeamControlPanel = document.getElementById('adminTeamControlPanel');
+        const manageSubAdminsBtn = document.getElementById('manageSubAdminsBtn');
+        const configurePushBtn = document.getElementById('configurePushBtn');
+
+        const canBeAdmin = hasAdminPrivilege(currentUser);
+        if (switchBtn) switchBtn.style.display = canBeAdmin ? 'inline-block' : 'none';
+
+        let isSolo = currentTeamCount === 'solo';
+
+        if (isAdmin && canBeAdmin) {
+            indicator.innerText = isSuperAdmin ? "👑 기본 관리자" : "🛡️ 추가 관리자";
+            indicator.style.color = "#16a34a";
+            switchBtn.innerText = "일반 전환";
+            adminControlCard.style.display = 'block';
+            adminDBControlCard.style.display = 'block';
+            if (adminNoticeComposeCard) adminNoticeComposeCard.style.display = 'block';
+            if (saveRecordContainer) saveRecordContainer.style.display = 'block';
+            if (cancelMatchBtn) cancelMatchBtn.style.display = 'inline-block';
+            if (adminTeamControlPanel) adminTeamControlPanel.style.display = isSolo ? 'none' : 'block';
+            if (manageSubAdminsBtn) manageSubAdminsBtn.style.display = isSuperAdmin ? 'inline-block' : 'none';
+            if (configurePushBtn) configurePushBtn.style.display = isSuperAdmin ? 'inline-block' : 'none';
+        } else {
+            indicator.innerText = "👤 일반 회원";
+            indicator.style.color = "var(--primary-color)";
+            if (canBeAdmin) switchBtn.innerText = "관리자 전환";
+            adminControlCard.style.display = 'none';
+            adminDBControlCard.style.display = 'none';
+            if (adminNoticeComposeCard) adminNoticeComposeCard.style.display = 'none';
+            if (saveRecordContainer) saveRecordContainer.style.display = 'none'; 
+            if (cancelMatchBtn) cancelMatchBtn.style.display = 'none';
+            if (adminTeamControlPanel) adminTeamControlPanel.style.display = 'none';
+            if (manageSubAdminsBtn) manageSubAdminsBtn.style.display = 'none';
+            if (configurePushBtn) configurePushBtn.style.display = 'none';
+        }
+        renderClubNotices();
+    }
+
+    function checkAdminAndExecute(callback) {
+        if (isAdmin && hasAdminPrivilege(currentUser)) {
+            callback();
+        } else {
+            alert('관리자 권한이 필요합니다.');
+        }
+    }
+
+    function openSubAdminModal() {
+        if (!isSuperAdmin) return alert('기본 관리자만 추가 관리자를 지정할 수 있습니다.');
+        const uids = Object.keys(approvedUsers || {});
+        if (uids.length === 0) return alert('승인된 회원이 없습니다.');
+
+        document.getElementById('subAdminListContainer').innerHTML = uids.map(uid => {
+            const name = approvedUsers[uid];
+            const isChecked = subAdmins && subAdmins[uid] === true;
+            const isSelf = currentUser && currentUser.uid === uid;
+            return `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; background: white; border-radius: 6px; margin-bottom: 5px; border: 1px solid var(--border-color);">
+                    <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; width: 100%;">
+                        <input type="checkbox" class="sub-admin-chk" data-uid="${uid}" ${isChecked || isSelf ? 'checked' : ''} ${isSelf ? 'disabled' : ''} style="width: 16px; height: 16px;">
+                        <strong>${escapeHtml(name)}</strong> ${isSelf ? '<span class="auto-badge">기본 관리자</span>' : ''}
+                    </label>
+                </div>
+            `;
+        }).join('');
+        document.getElementById('subAdminModal').style.display = 'flex';
+    }
+
+    function closeSubAdminModal() { document.getElementById('subAdminModal').style.display = 'none'; }
+
+    function saveSubAdmins() {
+        if (!isSuperAdmin) return;
+        let nextAdmins = {};
+        document.querySelectorAll('.sub-admin-chk').forEach(chk => {
+            const uid = chk.getAttribute('data-uid');
+            if (chk.checked && uid && (!currentUser || uid !== currentUser.uid)) {
+                nextAdmins[uid] = true;
+            }
+        });
+        db.ref('bowling_admins').set(nextAdmins).then(() => {
+            closeSubAdminModal();
+            alert('추가 관리자 권한 설정이 저장되었습니다.');
+        });
+    }
+
+    function openPushConfigModal() {
+        if (!isSuperAdmin) return alert('기본 관리자만 푸시 서버 설정을 변경할 수 있습니다.');
+        document.getElementById('gasWebhookUrlInput').value = pushConfig.gasUrl || '';
+        document.getElementById('gasPushSecretInput').value = pushConfig.pushSecret || '';
+        document.getElementById('fcmVapidKeyInput').value = pushConfig.vapidKey || '';
+        document.getElementById('pushConfigModal').style.display = 'flex';
+    }
+
+    function closePushConfigModal() { document.getElementById('pushConfigModal').style.display = 'none'; }
+
+    function savePushConfig() {
+        if (!isSuperAdmin) return;
+        const nextCfg = {
+            gasUrl: document.getElementById('gasWebhookUrlInput').value.trim(),
+            pushSecret: document.getElementById('gasPushSecretInput').value.trim(),
+            vapidKey: document.getElementById('fcmVapidKeyInput').value.trim()
+        };
+        db.ref('bowling_pushConfig').set(nextCfg).then(() => {
+            closePushConfigModal();
+            alert('푸시 서버 설정이 저장되었습니다.');
+        });
+    }
+
+    async function enablePushNotifications() {
+        if (!currentUser || !currentUser.uid) return alert('로그인 후 이용해 주세요.');
+        if (!('Notification' in window)) return alert('이 브라우저는 푸시 알림을 지원하지 않습니다.');
+
+        try {
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') {
+                return alert('알림 권한이 거부되었습니다. 브라우저 설정에서 알림을 허용해 주세요.');
+            }
+
+            if (firebase.messaging && firebase.messaging.isSupported()) {
+                const messaging = firebase.messaging();
+                const swReg = await navigator.serviceWorker.ready;
+                const tokenOptions = { serviceWorkerRegistration: swReg };
+                if (pushConfig && pushConfig.vapidKey) tokenOptions.vapidKey = pushConfig.vapidKey;
+
+                const token = await messaging.getToken(tokenOptions);
+                if (token) {
+                    await db.ref(`bowling_fcmTokens/${currentUser.uid}`).set({
+                        token: token,
+                        name: currentUser.name,
+                        updatedAt: Date.now()
+                    });
+                    initForegroundPushListener();
+                    const btn = document.getElementById('pushEnableBtn');
+                    if (btn) { btn.innerText = '🔔 알림 설정됨'; btn.style.background = '#16a34a'; }
+                    alert('푸시 알림이 활성화되었습니다!');
+                }
+            } else {
+                alert('홈 화면에 앱을 추가(PWA 설치)한 뒤 실행하면 푸시 알림을 받을 수 있습니다.');
+            }
+        } catch (err) {
+            console.error('FCM 토큰 등록 오류:', err);
+            alert('알림 토큰 등록 중 확인이 필요합니다: ' + err.message);
+        }
+    }
+
+    async function triggerGasPushNotification({ targetType, attendeeNames, title, body }) {
+        if (!isAdmin || !hasAdminPrivilege(currentUser)) return;
+        if (!pushConfig || !pushConfig.gasUrl || !pushConfig.pushSecret) return;
+
+        const now = Date.now();
+        if (now - lastPushSentAt < 3000) return;
+        lastPushSentAt = now;
+
+        try {
+            const idToken = await firebase.auth().currentUser.getIdToken();
+            await fetch(pushConfig.gasUrl, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    secret: pushConfig.pushSecret,
+                    senderUid: currentUser.uid,
+                    senderEmail: currentUser.email,
+                    idToken: idToken,
+                    targetType: targetType,
+                    attendeeNames: attendeeNames || [],
+                    title: title,
+                    body: body
+                })
+            });
+        } catch (e) {
+            console.error('GAS 푸시 발송 요청 실패:', e);
+        }
+    }
 
     function compressImageToDataUrl(file, maxWidth = 800, quality = 0.72) {
         return new Promise((resolve, reject) => {
